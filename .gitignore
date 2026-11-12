@@ -1,0 +1,32 @@
+# Credenciales y tokens
+.env
+*.env
+!.env.example
+*tokens*.json
+
+# Archivos generados en cada ejecucion (contienen datos de la cuenta)
+scout/estado.json
+scout/overlay.html
+trackers/overlays/*
+!trackers/overlays/.gitkeep
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Sistema / editor
+.vscode/
+Thumbs.db
+desktop.ini
+*.lnk
+
+# Reglas de seguridad comunes
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+.claude/
+.claudecode/
+*.log

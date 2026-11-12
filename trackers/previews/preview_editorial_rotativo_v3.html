@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Editorial Rotativo v3</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..900&display=swap">
+<style>
+  /* VISTA PREVIA - Editorial rotativo v3 (escudo con alas + icono de perfil, como la v2 actual).
+     Fijo: escudo, nombre + tag, historial de partidas (abajo).
+     Rota (arriba): linea bajo el nombre y el recuadro de sesion.
+       Pantalla A: elo + LP           | W-L + "Session"
+       Pantalla B: winrate + partidas | W-L + LP ganados/perdidos hoy
+     Lee ./overlay_data.json y ./overlay_rotativo_data.json (no modifica nada). */
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  body { font-family: 'Archivo', 'Inter Display', 'Inter', sans-serif; color: #f1efe9; padding: 28px; }
+  :root { --tier: 46, 204, 113; --win: 0, 163, 255; --loss: 255, 27, 72; --ink: 241, 239, 233; }
+  @keyframes entrar { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes latido { 0%,100% { box-shadow: 0 0 0 0 rgba(var(--tier), .55); } 50% { box-shadow: 0 0 0 5px rgba(var(--tier), 0); } }
+
+  .wrap { position: relative; display: inline-block; padding-left: 62px; }
+  /* Escudo con alas + icono: mismas proporciones que el overlay v2 actual (185x240, icono 62px a 112px), escaladas */
+  .crest { position: absolute; left: -6px; top: -26px; width: 139px; height: 180px; z-index: 10; pointer-events: none; animation: entrar .5s ease-out both; }
+  .crest .wings { width: 139px; height: 180px; object-fit: contain; filter: drop-shadow(0 0 8px rgba(var(--tier), .35)) drop-shadow(0 0 16px rgba(var(--tier), .2)); }
+  .crest .icon { position: absolute; left: 50%; top: 84px; width: 46px; height: 46px; margin-left: -23px; border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,.6); }
+  .card {
+    position: relative; width: 500px; padding: 16px 20px 14px 92px; box-sizing: border-box;
+    background: rgba(40, 40, 42, 0.94);
+    clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+    animation: entrar .5s ease-out both;
+  }
+  .card::before { content: ""; position: absolute; inset: 0; pointer-events: none; padding: 1px; z-index: 5;
+    background: linear-gradient(135deg, rgba(var(--tier), .9) 0 6%, rgba(var(--ink), .12) 14% 86%, rgba(var(--tier), .9) 94%);
+    clip-path: inherit;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+
+  .pills { display: flex; gap: 6px; align-items: center; }
+  .pill { padding: 3px 10px 4px; border: 1px solid rgba(var(--ink), .45); border-radius: 20px;
+    font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: rgba(var(--ink), .8); line-height: 1; }
+  .indic { margin-left: auto; display: flex; gap: 4px; }
+  .indic i { width: 14px; height: 3px; background: rgba(var(--ink), .2); transition: background .4s; }
+  .indic i.on { background: rgb(var(--tier)); }
+
+  /* ---- parte de arriba ---- */
+  .head { display: flex; align-items: stretch; gap: 14px; margin-top: 12px; }
+  .embbox { position: relative; width: 74px; height: 74px; flex-shrink: 0; border: 1.5px solid rgba(var(--ink), .7); border-radius: 4px;
+    display: flex; align-items: center; justify-content: center; }
+  .embbox::after { content: ""; position: absolute; inset: 5px -7px -7px 5px; border: 1.5px solid rgba(var(--ink), .3); border-radius: 4px; z-index: -1; }
+  .embbox img { width: 60px; height: 60px; object-fit: contain; filter: drop-shadow(0 0 6px rgba(var(--tier), .55)); }
+
+  .mid { flex: 1; min-width: 0; padding-left: 6px; }
+  .name { font-size: 38px; font-weight: 900; font-stretch: 112%; letter-spacing: -0.02em; line-height: .95; white-space: nowrap; overflow: hidden; }
+  .name .tag { font-size: 16px; font-weight: 500; font-stretch: 100%; letter-spacing: 0; color: rgba(var(--ink), .55); margin-left: 6px; }
+
+  /* zona que rota bajo el nombre */
+  .rot { position: relative; height: 34px; margin-top: 7px; }
+  .rot > div { position: absolute; inset: 0; transition: opacity .5s ease, transform .5s ease; }
+  .oculta { opacity: 0; transform: translateY(8px); pointer-events: none; }
+  .line { display: flex; align-items: baseline; gap: 8px; font-size: 17px; font-weight: 800; line-height: 1; white-space: nowrap; }
+  .line .tier { color: rgb(var(--tier)); }
+  .line .muted { font-weight: 500; color: rgba(var(--ink), .6); font-size: 14px; }
+  .line .sep { width: 1px; height: 14px; background: rgba(var(--ink), .3); align-self: center; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; background: rgb(var(--tier)); animation: latido 2.6s ease-in-out infinite; align-self: center; }
+  .seg { display: flex; gap: 3px; margin-top: 8px; }
+  .seg i { width: 14px; height: 6px; background: rgba(var(--ink), .12); transform: skewX(-20deg); }
+  .seg i.on { background: rgb(var(--tier)); box-shadow: 0 0 5px rgba(var(--tier), .6); }
+  .wrbar { display: flex; height: 6px; margin-top: 8px; width: 186px; background: rgba(var(--ink), .12); transform: skewX(-20deg); }
+  .wrbar .bw { background: rgb(var(--win)); } .wrbar .bl { background: rgb(var(--loss)); }
+
+  /* recuadro de sesion */
+  .ses { width: 98px; flex-shrink: 0; border-left: 1px solid rgba(var(--ink), .25); padding-left: 14px;
+    display: flex; flex-direction: column; justify-content: center; }
+  .ses .wl { font-size: 26px; font-weight: 900; font-stretch: 112%; letter-spacing: -0.01em; line-height: 1; white-space: nowrap; }
+  .ses .wl .w { color: rgb(var(--win)); } .ses .wl .l { color: rgb(var(--loss)); } .ses .wl .d { color: rgba(var(--ink), .35); margin: 0 2px; font-weight: 400; }
+  .ses .sub { position: relative; height: 16px; margin-top: 6px; }
+  .ses .sub > div { position: absolute; inset: 0; font-size: 13px; font-weight: 700; white-space: nowrap; transition: opacity .5s ease, transform .5s ease; }
+  .ses .sub .lbl { color: rgba(var(--ink), .55); font-weight: 500; }
+  .pos { color: #3ddc84; } .neg { color: rgb(var(--loss)); } .zero { color: rgba(var(--ink), .55); }
+
+  /* ---- historial fijo ---- */
+  .rule { height: 1px; background: rgba(var(--ink), .22); margin: 14px 0 11px; }
+  .hist { display: flex; gap: 4px; }
+  .m { width: 35px; text-align: center; animation: entrar .35s ease-out both; }
+  .m img { width: 35px; height: 35px; display: block; object-fit: cover;
+    clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px); }
+  .m .bar { height: 3px; margin-top: 3px; }
+  .m.win .bar { background: rgb(var(--win)); } .m.loss .bar { background: rgb(var(--loss)); }
+  .m.loss img { filter: grayscale(.55) brightness(.8); }
+  .m span { display: block; margin-top: 3px; font-size: 10px; font-weight: 600; color: rgba(var(--ink), .6); }
+  .m span.mvp { color: #ffc93c; } .m span.ace { color: #b79cff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="crest"><img id="emb" class="wings" alt=""><img id="icon" class="icon" alt=""></div>
+<div class="card">
+  <div class="pills">
+    <span class="pill">Ranked Solo</span>
+    <div class="indic"><i id="i1" class="on"></i><i id="i2"></i></div>
+  </div>
+
+  <div class="head">
+
+    <div class="mid">
+      <div class="name" id="nameBox"><span id="name">-</span><span class="tag" id="tag"></span></div>
+      <div class="rot">
+        <!-- A: elo -->
+        <div id="rA">
+          <div class="line"><span class="tier" id="tier">-</span><span><span id="lp">0</span>LP</span><span class="dot"></span></div>
+          <div class="seg" id="seg"></div>
+        </div>
+        <!-- B: winrate -->
+        <div id="rB" class="oculta">
+          <div class="line"><span><span id="wr">—</span> Winrate</span><span class="sep"></span><span class="muted"><span id="games">-</span> Games</span></div>
+          <div class="wrbar"><div class="bw" id="bw" style="width:50%"></div><div class="bl" id="bl" style="width:50%"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ses">
+      <div class="wl"><span class="w" id="w">0W</span><span class="d">-</span><span class="l" id="l">0L</span></div>
+      <div class="sub">
+        <div id="sA" class="lbl">Session</div>
+        <div id="sB" class="oculta"><span id="lpdiff" class="zero">±0 LP</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rule"></div>
+  <div class="hist" id="hist"></div>
+</div>
+</div>
+<script>
+
+  const COLORES = {
+    IRON:"161,157,148", BRONZE:"205,127,50", SILVER:"189,195,199", GOLD:"241,196,15",
+    PLATINUM:"26,188,156", EMERALD:"46,204,113", DIAMOND:"52,152,219",
+    MASTER:"224,64,251", GRANDMASTER:"231,76,60", CHALLENGER:"243,156,18"
+  };
+  const SIN_DIVISION = ["MASTER", "GRANDMASTER", "CHALLENGER"];
+  const $ = id => document.getElementById(id);
+
+  // Convierte el historial_html que ya genera el tracker en una lista simple
+  function leerHistorial(html) {
+    const doc = new DOMParser().parseFromString(html || "", "text/html");
+    return [...doc.body.children].map(el => {
+      const img = el.querySelector("img");
+      const borde = el.querySelector('[style*="box-shadow"]');
+      const estilo = borde ? borde.getAttribute("style") : "";
+      const etiqueta = ((el.querySelector("span") || {}).textContent || "").trim();
+      return { img: img ? img.getAttribute("src") : "", win: estilo.includes("0, 163, 255"), etiqueta };
+    }).filter(p => p.img);
+  }
+  function claseEtiqueta(e) { return e === "MVP" ? "mvp" : e === "ACE" ? "ace" : ""; }
+
+  let ultimoHist = null;
+  async function actualizar() {
+    try {
+      const res = await fetch("./overlay_data.json?v=" + Date.now());
+      if (!res.ok) return;
+      const d = await res.json();
+      const tier = (d.tier || "EMERALD").toUpperCase();
+      const sinDiv = SIN_DIVISION.includes(tier);
+      document.documentElement.style.setProperty("--tier", COLORES[tier] || "255,255,255");
+      const info = {
+        tier, sinDiv,
+        tierTexto: tier + (sinDiv ? "" : " " + d.rank),
+        tierCorto: tier.charAt(0) + tier.slice(1).toLowerCase() + (sinDiv ? "" : " " + d.rank),
+        icono: `https://ddragon.leagueoflegends.com/cdn/${d.latest_patch}/img/profileicon/${d.profile_icon_id}.png`,
+        emblema: `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-emblem/emblem-${tier.toLowerCase()}.png`,
+        pct: Math.max(0, Math.min(100, d.lp))
+      };
+      render(d, info);
+      if (d.historial_html !== ultimoHist) {
+        ultimoHist = d.historial_html;
+        renderHistorial(leerHistorial(d.historial_html));
+      }
+    } catch (e) { console.error(e); }
+  }
+  function setText(id, v) { const el = $(id); if (el) el.textContent = v; }
+  function setSrc(id, v) { const el = $(id); if (el && el.getAttribute("src") !== v) el.src = v; }
+  actualizar();
+  setInterval(actualizar, 3000);
+
+  const ULTIMAS = 10;     // partidas que se muestran abajo
+  const SEGUNDOS = 7;     // segundos de cada rotacion
+  const BASE = { IRON:0, BRONZE:400, SILVER:800, GOLD:1200, PLATINUM:1600, EMERALD:2000, DIAMOND:2400, MASTER:2800, GRANDMASTER:2800, CHALLENGER:2800 };
+  const DIV = { IV:0, III:100, II:200, I:300 };
+
+  // LP ganados/perdidos hoy: se guarda el LP con el que arranco el dia
+  function lpAbsoluto(d) { return (BASE[(d.tier||"").toUpperCase()] || 0) + (DIV[d.rank] || 0) + (d.lp || 0); }
+  function lpDelDia(d) {
+    const hoy = new Date().toISOString().slice(0, 10), key = "lpInicio-" + hoy, actual = lpAbsoluto(d);
+    let inicio = actual;
+    try {
+      const g = localStorage.getItem(key);
+      if (g === null) localStorage.setItem(key, String(actual)); else inicio = parseInt(g);
+    } catch (e) { if (window._lpIni === undefined) window._lpIni = actual; inicio = window._lpIni; }
+    return actual - inicio;
+  }
+
+  function ajustarNombre() {  // achica el nombre si es muy largo
+    const box = $("nameBox"); let size = 38; box.style.fontSize = size + "px";
+    while (box.scrollWidth > box.clientWidth && size > 20) { size -= 2; box.style.fontSize = size + "px"; }
+  }
+
+  function render(d, i) {
+    setSrc("emb", `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-emblem/wings/wings_${i.tier.toLowerCase()}.png`);
+    setSrc("icon", i.icono);
+    setText("name", d.riot_id || "-");
+    setText("tag", d.riot_tag ? "#" + d.riot_tag : "");
+    ajustarNombre();
+    setText("tier", i.tierCorto);
+    setText("lp", d.lp);
+    const on = i.sinDiv ? 10 : Math.round(i.pct / 10);
+    $("seg").innerHTML = Array.from({length: 10}, (_, k) => `<i class="${k < on ? "on" : ""}"></i>`).join("");
+    setText("w", (d.wins_hoy || 0) + "W"); setText("l", (d.losses_hoy || 0) + "L");
+
+    const diff = lpDelDia(d), el = $("lpdiff");
+    el.textContent = (diff > 0 ? "+" : diff < 0 ? "" : "±") + diff + " LP";
+    el.className = diff > 0 ? "pos" : diff < 0 ? "neg" : "zero";
+  }
+  function renderHistorial(p) {
+    $("hist").innerHTML = p.slice(0, ULTIMAS).map((m, k) => `<div class="m ${m.win ? "win" : "loss"}" style="animation-delay:${k*.05}s">
+      <img src="${m.img}" alt=""><div class="bar"></div><span class="${claseEtiqueta(m.etiqueta)}">${m.etiqueta}</span></div>`).join("");
+  }
+
+  // Winrate y partidas de la temporada: los toma del tracker rotativo (si esta corriendo)
+  async function temporada() {
+    try {
+      const r = await fetch("./overlay_rotativo_data.json?v=" + Date.now());
+      if (!r.ok) return;
+      const t = await r.json(), total = (t.wins || 0) + (t.losses || 0);
+      if (!total) return;
+      setText("wr", Math.round(t.wins * 100 / total) + "%");
+      setText("games", total);
+      $("bw").style.width = (t.wins * 100 / total) + "%";
+      $("bl").style.width = (t.losses * 100 / total) + "%";
+    } catch (e) { console.error(e); }
+  }
+  temporada(); setInterval(temporada, 10000);
+
+  // Rotacion de la parte de arriba. Con ?slide=1 o ?slide=2 queda fija (para probar).
+  function mostrar(n) {
+    ["rA", "sA"].forEach(id => $(id).classList.toggle("oculta", n !== 1));
+    ["rB", "sB"].forEach(id => $(id).classList.toggle("oculta", n !== 2));
+    $("i1").classList.toggle("on", n === 1); $("i2").classList.toggle("on", n === 2);
+  }
+  const fija = parseInt(new URLSearchParams(location.search).get("slide"));
+  if (fija === 1 || fija === 2) mostrar(fija);
+  else { let n = 1; mostrar(n); setInterval(() => { n = n === 1 ? 2 : 1; mostrar(n); }, SEGUNDOS * 1000); }
+</script>
+</body>
+</html>

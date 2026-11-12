@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Moderno Neon</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=Oxanium:wght@500;600;700;800&display=swap">
+<style>
+  /* VISTA PREVIA - Moderno Neon. Lee ./overlay_data.json (no modifica nada). */
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  body { font-family: 'Inter', sans-serif; color: #fff; padding: 28px; }
+  :root { --tier: 46, 204, 113; --win: 0, 163, 255; --loss: 255, 27, 72; }
+  @keyframes entrar { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  @keyframes pulso { 0%,100% { opacity: .6; } 50% { opacity: 1; } }
+  @keyframes scan { from { transform: translateY(-100%); } to { transform: translateY(100%); } }
+  .wrap { position: relative; display: inline-block; filter: drop-shadow(0 0 10px rgba(var(--tier), .55)); animation: entrar .5s ease-out both; }
+  .card {
+    position: relative; overflow: hidden; padding: 16px 22px 14px 18px;
+    background: linear-gradient(120deg, rgba(8,10,16,.92), rgba(16,20,30,.88));
+    clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
+  }
+  .edge { position: absolute; inset: 0; pointer-events: none; padding: 2px;
+    background: linear-gradient(120deg, rgb(var(--tier)), rgba(var(--tier), .1) 40%, rgba(var(--tier), .1) 60%, rgb(var(--tier)));
+    clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+    animation: pulso 2.5s ease-in-out infinite; }
+  .card::after { content: ""; position: absolute; left: 0; right: 0; height: 40%; pointer-events: none;
+    background: linear-gradient(transparent, rgba(var(--tier), .07), transparent); animation: scan 4s linear infinite; }
+  .top { display: flex; align-items: center; gap: 16px; }
+  .emb { width: 66px; height: 66px; object-fit: contain; filter: drop-shadow(0 0 8px rgba(var(--tier), .7)); }
+  .name { font-family: 'Oxanium', sans-serif; font-size: 22px; font-weight: 700; line-height: 1; letter-spacing: .04em; text-transform: uppercase; }
+  .name small { font-size: 14px; color: rgba(255,255,255,.45); margin-left: 4px; }
+  .tier { margin-top: 6px; font-family: 'Oxanium', sans-serif; font-size: 17px; font-weight: 700; color: rgb(var(--tier)); letter-spacing: .08em; text-shadow: 0 0 10px rgba(var(--tier), .8); }
+  .tier span { color: #fff; text-shadow: none; margin-left: 8px; }
+  .seg { display: flex; gap: 3px; margin-top: 8px; }
+  .seg i { width: 16px; height: 5px; background: rgba(255,255,255,.1); transform: skewX(-20deg); }
+  .seg i.on { background: rgb(var(--tier)); box-shadow: 0 0 6px rgba(var(--tier), .9); }
+  .ses { margin-left: 18px; padding-left: 18px; border-left: 1px solid rgba(var(--tier), .35); font-family: 'Oxanium', sans-serif; text-align: center; }
+  .ses b { font-size: 26px; line-height: 1; }
+  .ses .w { color: rgb(var(--win)); text-shadow: 0 0 8px rgba(var(--win), .8); }
+  .ses .l { color: rgb(var(--loss)); text-shadow: 0 0 8px rgba(var(--loss), .8); }
+  .ses small { display: block; margin-top: 4px; font-size: 10px; letter-spacing: .2em; color: rgba(255,255,255,.5); }
+  .hist { display: flex; gap: 6px; margin-top: 14px; }
+  .m { position: relative; width: 32px; animation: entrar .35s ease-out both; text-align: center; }
+  .m img { width: 32px; height: 32px; display: block; clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px); }
+  .m.win img { outline: 2px solid rgb(var(--win)); outline-offset: -2px; }
+  .m.loss img { outline: 2px solid rgb(var(--loss)); outline-offset: -2px; filter: grayscale(.5) brightness(.8); }
+  .m span { display: block; margin-top: 3px; font-family: 'Oxanium', sans-serif; font-size: 9px; font-weight: 700; color: rgba(255,255,255,.55); }
+  .m span.mvp { color: #ffd23f; text-shadow: 0 0 6px rgba(255,210,63,.8); }
+  .m span.ace { color: #d08bff; text-shadow: 0 0 6px rgba(208,139,255,.8); }
+
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="card">
+    <div class="top">
+      <img id="emb" class="emb" alt="">
+      <div>
+        <div class="name"><span id="name">-</span><small id="tag"></small></div>
+        <div class="tier"><b id="tier">-</b><span id="lp">0 LP</span></div>
+        <div class="seg" id="seg"></div>
+      </div>
+      <div class="ses"><b class="w" id="w">0</b> <b style="opacity:.4">/</b> <b class="l" id="l">0</b><small>SESSION</small></div>
+    </div>
+    <div class="hist" id="hist"></div>
+  </div>
+  <div class="edge"></div>
+</div>
+
+<script>
+
+  const COLORES = {
+    IRON:"161,157,148", BRONZE:"205,127,50", SILVER:"189,195,199", GOLD:"241,196,15",
+    PLATINUM:"26,188,156", EMERALD:"46,204,113", DIAMOND:"52,152,219",
+    MASTER:"224,64,251", GRANDMASTER:"231,76,60", CHALLENGER:"243,156,18"
+  };
+  const SIN_DIVISION = ["MASTER", "GRANDMASTER", "CHALLENGER"];
+  const $ = id => document.getElementById(id);
+
+  // Convierte el historial_html que ya genera el tracker en una lista simple
+  function leerHistorial(html) {
+    const doc = new DOMParser().parseFromString(html || "", "text/html");
+    return [...doc.body.children].map(el => {
+      const img = el.querySelector("img");
+      const borde = el.querySelector('[style*="box-shadow"]');
+      const estilo = borde ? borde.getAttribute("style") : "";
+      const etiqueta = ((el.querySelector("span") || {}).textContent || "").trim();
+      return { img: img ? img.getAttribute("src") : "", win: estilo.includes("0, 163, 255"), etiqueta };
+    }).filter(p => p.img);
+  }
+  function claseEtiqueta(e) { return e === "MVP" ? "mvp" : e === "ACE" ? "ace" : ""; }
+
+  let ultimoHist = null;
+  async function actualizar() {
+    try {
+      const res = await fetch("./overlay_data.json?v=" + Date.now());
+      if (!res.ok) return;
+      const d = await res.json();
+      const tier = (d.tier || "EMERALD").toUpperCase();
+      const sinDiv = SIN_DIVISION.includes(tier);
+      document.documentElement.style.setProperty("--tier", COLORES[tier] || "255,255,255");
+      const info = {
+        tier, sinDiv,
+        tierTexto: tier + (sinDiv ? "" : " " + d.rank),
+        tierCorto: tier.charAt(0) + tier.slice(1).toLowerCase() + (sinDiv ? "" : " " + d.rank),
+        icono: `https://ddragon.leagueoflegends.com/cdn/${d.latest_patch}/img/profileicon/${d.profile_icon_id}.png`,
+        emblema: `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-emblem/emblem-${tier.toLowerCase()}.png`,
+        pct: Math.max(0, Math.min(100, d.lp))
+      };
+      render(d, info);
+      if (d.historial_html !== ultimoHist) {
+        ultimoHist = d.historial_html;
+        renderHistorial(leerHistorial(d.historial_html));
+      }
+    } catch (e) { console.error(e); }
+  }
+  function setText(id, v) { const el = $(id); if (el) el.textContent = v; }
+  function setSrc(id, v) { const el = $(id); if (el && el.getAttribute("src") !== v) el.src = v; }
+  actualizar();
+  setInterval(actualizar, 3000);
+
+
+  function render(d, i) {
+    setSrc("emb", i.emblema);
+    setText("name", d.riot_id || "-"); setText("tag", d.riot_tag ? "#" + d.riot_tag : "");
+    setText("tier", i.tierTexto); setText("lp", d.lp + " LP");
+    setText("w", d.wins_hoy); setText("l", d.losses_hoy);
+    const on = i.sinDiv ? 10 : Math.round(i.pct / 10);
+    $("seg").innerHTML = Array.from({length: 10}, (_, k) => `<i class="${k < on ? "on" : ""}"></i>`).join("");
+  }
+  function renderHistorial(p) {
+    $("hist").innerHTML = p.map((m, k) => `<div class="m ${m.win ? "win" : "loss"}" style="animation-delay:${k*.05}s">
+      <img src="${m.img}" alt=""><span class="${claseEtiqueta(m.etiqueta)}">${m.etiqueta}</span></div>`).join("");
+  }
+
+</script>
+</body>
+</html>

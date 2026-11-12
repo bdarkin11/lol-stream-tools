@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Glitch intenso</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..900&display=swap">
+<style>
+  /* Tracker In-Game v3 - generado por tracker_ingame_v3.py. Lee ./overlay_data.json
+     Fijo: escudo con alas + icono, nombre + tag, ultimas 10 partidas.
+     Rota cada 7 s: elo + LP | W-L + Session   <->   winrate + partidas | W-L + LP de la sesion */
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  body { font-family: 'Archivo', sans-serif; color: #f1efe9; padding: 60px 28px; }
+  :root { --tier: 46, 204, 113; --win: 0, 163, 255; --loss: 255, 27, 72; --ink: 241, 239, 233; }
+  @keyframes entrar { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes latido { 0%,100% { box-shadow: 0 0 0 0 rgba(var(--tier), .55); } 50% { box-shadow: 0 0 0 5px rgba(var(--tier), 0); } }
+
+  .wrap { position: relative; display: inline-block; padding-left: 0; }
+  .crest { position: absolute; left: -6px; top: 50%; margin-top: -168px; width: 208px; height: 270px; z-index: 10; pointer-events: none; animation: entrar .5s ease-out both; }
+  .crest .wings { width: 208px; height: 270px; object-fit: contain; filter: drop-shadow(0 0 8px rgba(var(--tier), .35)) drop-shadow(0 0 16px rgba(var(--tier), .2)); }
+  .crest .icon { position: absolute; left: 50%; top: 126px; width: 69px; height: 69px; margin-left: -34.5px; border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,.6); }
+  .card {
+    position: relative; width: 603px; padding: 12px 20px 11px 195px; box-sizing: border-box;
+    background: linear-gradient(90deg, rgba(40, 40, 42, 0.96) 30%, rgba(40, 40, 42, 0.88) 55%, rgba(40, 40, 42, 0.55) 78%, rgba(40, 40, 42, 0) 100%);
+    clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+    animation: entrar .5s ease-out both;
+  }
+  .card::before { content: ""; position: absolute; inset: 0; pointer-events: none; padding: 1px; z-index: 5;
+    background: linear-gradient(90deg, rgba(var(--tier), .9) 0%, rgba(var(--ink), .16) 12%, rgba(var(--ink), .16) 40%, rgba(var(--ink), .06) 75%, rgba(var(--ink), 0) 100%);
+    clip-path: inherit;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+  .indic { position: absolute; top: 9px; right: 20px; display: flex; gap: 4px; z-index: 6; }
+  .indic i { width: 14px; height: 3px; background: rgba(var(--ink), .2); transition: background .4s; }
+  .indic i.on { background: rgb(var(--tier)); }
+
+  .head { display: flex; align-items: stretch; gap: 14px; margin-top: 4px; }
+  .mid { flex: 1; min-width: 0; padding-left: 6px; }
+  .name { font-size: 32px; font-weight: 900; font-stretch: 112%; letter-spacing: -0.02em; line-height: .95; white-space: nowrap; overflow: hidden; }
+  .name .tag { font-size: 16px; font-weight: 500; font-stretch: 100%; letter-spacing: 0; color: rgba(var(--ink), .55); margin-left: 6px; }
+
+  .rot { position: relative; height: 34px; margin-top: 7px; }
+  .rot > div { position: absolute; inset: 0; transition: opacity .5s ease, transform .5s ease; }
+  .oculta { opacity: 0; transform: translateY(8px); pointer-events: none; }
+  .line { display: flex; align-items: baseline; gap: 8px; font-size: 17px; font-weight: 800; line-height: 1; white-space: nowrap; }
+  .line .tier { color: rgb(var(--tier)); }
+  .line .muted { font-weight: 500; color: rgba(var(--ink), .6); font-size: 14px; }
+  .line .sep { width: 1px; height: 14px; background: rgba(var(--ink), .3); align-self: center; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; background: rgb(var(--tier)); animation: latido 2.6s ease-in-out infinite; align-self: center; }
+  .seg { display: flex; gap: 3px; margin-top: 8px; }
+  .seg i { width: 14px; height: 6px; background: rgba(var(--ink), .12); transform: skewX(-20deg); }
+  .seg i.on { background: rgb(var(--tier)); box-shadow: 0 0 5px rgba(var(--tier), .6); }
+  .wrbar { display: flex; height: 6px; margin-top: 8px; width: 186px; background: rgba(var(--ink), .12); transform: skewX(-20deg); }
+  .wrbar .bw { background: rgb(var(--win)); } .wrbar .bl { background: rgb(var(--loss)); }
+
+  .ses { width: 98px; flex-shrink: 0; border-left: 1px solid rgba(var(--ink), .25); padding-left: 14px;
+    display: flex; flex-direction: column; justify-content: center; }
+  .ses .wl { font-size: 26px; font-weight: 900; font-stretch: 112%; letter-spacing: -0.01em; line-height: 1; white-space: nowrap; }
+  .ses .wl .w { color: rgb(var(--win)); } .ses .wl .l { color: rgb(var(--loss)); } .ses .wl .d { color: rgba(var(--ink), .35); margin: 0 2px; font-weight: 400; }
+  .ses .sub { position: relative; height: 16px; margin-top: 6px; }
+  .ses .sub > div { position: absolute; inset: 0; font-size: 13px; font-weight: 700; white-space: nowrap; transition: opacity .5s ease, transform .5s ease; }
+  .ses .sub .lbl { color: rgba(var(--ink), .55); font-weight: 500; }
+  .pos { color: #3ddc84; } .neg { color: rgb(var(--loss)); } .zero { color: rgba(var(--ink), .55); }
+
+  .rule { height: 1px; background: linear-gradient(90deg, rgba(var(--ink), .25), rgba(var(--ink), .08)); margin: 11px 0 9px; }
+  .hist { display: flex; gap: 4px; min-height: 57px; }
+  .m { width: 35px; text-align: center; animation: entrar .35s ease-out both; }
+  .m img { width: 35px; height: 35px; display: block; object-fit: cover;
+    clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px); }
+  .m .bar { height: 3px; margin-top: 3px; }
+  .m.win .bar { background: rgb(var(--win)); } .m.loss .bar { background: rgb(var(--loss)); }
+  .m.loss img { filter: grayscale(.55) brightness(.8); }
+  .m span { display: block; margin-top: 3px; font-size: 10px; font-weight: 600; color: rgba(var(--ink), .6); }
+  .m span.mvp { color: #ffc93c; } .m span.ace { color: #b79cff; }
+
+  /* ================= EFECTO GLITCH (intenso) ================= */
+  /* Cortes secos, como en el video: sin fundidos */
+  .rot > div, .ses .sub > div { transition: none !important; }
+  .oculta { transform: none !important; }
+
+  /* Grano de impresion que "salta" a 10 cuadros por segundo */
+  .grain { position: absolute; inset: 0; pointer-events: none; z-index: 4; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); opacity: .13; animation: grano 1s steps(10) infinite; }
+  @keyframes grano { 0%{background-position:0 0} 10%{background-position:-37px 21px} 20%{background-position:53px -14px}
+    30%{background-position:-12px 47px} 40%{background-position:29px 8px} 50%{background-position:-44px -33px}
+    60%{background-position:17px 39px} 70%{background-position:-25px -6px} 80%{background-position:41px 26px} 90%{background-position:-8px -45px} }
+  .scan { position: absolute; inset: 0; pointer-events: none; z-index: 4; display: block;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 1px, transparent 1px 3px); opacity: .55; }
+
+  /* Separacion rojo/azul en el texto durante el glitch */
+  @keyframes rgb {
+    0%   { text-shadow: -4px 0 rgba(255,27,72,.95), 4px 0 rgba(0,163,255,.95); transform: translateX(2px); }
+    20%  { text-shadow: 2px 0 rgba(255,27,72,.9), -2px 0 rgba(0,163,255,.9); transform: translateX(-4px); }
+    40%  { text-shadow: -4px 1px rgba(255,27,72,.9), 2px -1px rgba(0,163,255,.9); transform: translateX(1px); }
+    60%  { text-shadow: 1px 0 rgba(255,27,72,.7), -1px 0 rgba(0,163,255,.7); transform: translateX(-1px); }
+    80%  { text-shadow: none; transform: translateX(1px); }
+    100% { text-shadow: none; transform: none; }
+  }
+  .wrap.glitch .name, .wrap.glitch .rot, .wrap.glitch .ses { animation: rgb .65s steps(1) both; }
+  .wrap.mini .name { animation: rgb .3s steps(1) both; }
+
+  /* Bandas de "rotura" que cruzan la tarjeta */
+  .tears { position: absolute; inset: 0; pointer-events: none; z-index: 7; }
+  .tears i { position: absolute; left: 0; right: 0; height: 4px; opacity: 0; mix-blend-mode: screen; }
+  .wrap.glitch .tears i { animation: tear .65s steps(1) both; }
+  .tears i:nth-child(1) { background: rgba(255,27,72,.75); }
+  .tears i:nth-child(2) { background: rgba(0,163,255,.75); animation-delay: .07s !important; }
+  .tears i:nth-child(3) { background: rgba(var(--tier),.6); animation-delay: .14s !important; }
+  .tears i:nth-child(4) { background: rgba(241,239,233,.35); animation-delay: .04s !important; display: block; }
+  .tears i:nth-child(5) { background: rgba(255,27,72,.5); animation-delay: .2s !important; display: block; }
+  @keyframes tear { 0%{opacity:1; transform:translateX(-10px)} 25%{opacity:0} 40%{opacity:1; transform:translateX(14px) scaleY(1.8)} 60%{opacity:0} 75%{opacity:.8; transform:translateX(-6px)} 100%{opacity:0} }
+
+  /* Intenso: la tarjeta se "corta" en franjas y salta */
+  @keyframes cortes {
+    0%   { clip-path: inset(0 0 62% 0); transform: translateX(-5px); }
+    15%  { clip-path: inset(35% 0 20% 0); transform: translateX(6px); }
+    30%  { clip-path: inset(0 0 0 0); transform: translateX(-2px); }
+    45%  { clip-path: inset(55% 0 0 0); transform: translateX(4px); }
+    60%  { clip-path: inset(0 0 0 0); transform: translateX(0); }
+    100% { clip-path: inset(0 0 0 0); transform: none; }
+  }
+  .wrap.glitch.fuerte .head, .wrap.glitch.fuerte .hist { animation: cortes .65s steps(1) both; }
+  @keyframes escudo { 0%{filter: drop-shadow(-4px 0 0 rgba(255,27,72,.9)) drop-shadow(4px 0 0 rgba(0,163,255,.9)); transform: translateX(3px)}
+    30%{filter: none; transform: translateX(-3px)} 50%{filter: drop-shadow(3px 0 0 rgba(255,27,72,.9)) drop-shadow(-3px 0 0 rgba(0,163,255,.9)); transform:none} 70%,100%{filter:none; transform:none} }
+  .wrap.glitch.fuerte .crest .wings, .wrap.glitch.fuerte .crest .icon { animation: escudo .65s steps(1) both; }
+
+  /* Historial: aparece parpadeando, entrecortado */
+  .m { animation-name: parpadeo !important; animation-duration: .6s !important; animation-timing-function: steps(1) !important; }
+  @keyframes parpadeo { 0%{opacity:0} 20%{opacity:1} 35%{opacity:0} 50%{opacity:1; transform:translateX(-2px)} 65%{opacity:.3} 80%,100%{opacity:1; transform:none} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="crest"><img id="emb" class="wings" alt=""><img id="icon" class="icon" alt=""></div>
+  <div class="card">
+    <div class="indic"><i id="i1" class="on"></i><i id="i2"></i></div>
+    <div class="head">
+      <div class="mid">
+        <div class="name" id="nameBox"><span id="name">-</span><span class="tag" id="tag"></span></div>
+        <div class="rot">
+          <div id="rA">
+            <div class="line"><span class="tier" id="tier">-</span><span><span id="lp">0</span>LP</span><span class="dot"></span></div>
+            <div class="seg" id="seg"></div>
+          </div>
+          <div id="rB" class="oculta">
+            <div class="line"><span><span id="wr">—</span> Winrate</span><span class="sep"></span><span class="muted"><span id="games">-</span> Games</span></div>
+            <div class="wrbar"><div class="bw" id="bw" style="width:50%"></div><div class="bl" id="bl" style="width:50%"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="ses">
+        <div class="wl"><span class="w" id="w">0W</span><span class="d">-</span><span class="l" id="l">0L</span></div>
+        <div class="sub">
+          <div id="sA" class="lbl">Session</div>
+          <div id="sB" class="oculta"><span id="lpdiff" class="zero">±0 LP</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="rule"></div>
+    <div class="hist" id="hist"></div>
+  </div>
+</div>
+<script>
+  const PARTIDAS = 10;   // partidas que se muestran abajo
+  const SEGUNDOS = parseFloat(new URLSearchParams(location.search).get("seg")) || 7;    // segundos de cada rotacion
+  const COLORES = {
+    IRON:"161,157,148", BRONZE:"205,127,50", SILVER:"189,195,199", GOLD:"241,196,15",
+    PLATINUM:"26,188,156", EMERALD:"46,204,113", DIAMOND:"52,152,219",
+    MASTER:"224,64,251", GRANDMASTER:"231,76,60", CHALLENGER:"243,156,18"
+  };
+  const SIN_DIVISION = ["MASTER", "GRANDMASTER", "CHALLENGER"];
+  const $ = id => document.getElementById(id);
+  const setText = (id, v) => { const el = $(id); if (el && el.textContent !== String(v)) el.textContent = v; };
+  const setSrc = (id, v) => { const el = $(id); if (el && el.getAttribute("src") !== v) el.src = v; };
+
+  function ajustarNombre() {  // achica el nombre si es muy largo
+    const box = $("nameBox"); let size = 32; box.style.fontSize = size + "px";
+    while (box.scrollWidth > box.clientWidth && size > 20) { size -= 2; box.style.fontSize = size + "px"; }
+  }
+
+  let ultimoHist = null, ultimoNombre = null;
+  async function actualizar() {
+    try {
+      const res = await fetch("./overlay_data.json?v=" + Date.now());
+      if (!res.ok) return;
+      const d = await res.json();
+      const tier = (d.tier || "EMERALD").toUpperCase();
+      const sinDiv = SIN_DIVISION.includes(tier);
+      document.documentElement.style.setProperty("--tier", COLORES[tier] || "255,255,255");
+
+      setSrc("emb", `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-emblem/wings/wings_${tier.toLowerCase()}.png`);
+      setSrc("icon", `https://ddragon.leagueoflegends.com/cdn/${d.latest_patch}/img/profileicon/${d.profile_icon_id}.png`);
+
+      const nombre = (d.riot_id || "-") + "|" + (d.riot_tag || "");
+      if (nombre !== ultimoNombre) {
+        ultimoNombre = nombre;
+        setText("name", d.riot_id || "-");
+        setText("tag", d.riot_tag ? "#" + d.riot_tag : "");
+        ajustarNombre();
+      }
+
+      // Rotacion A: elo
+      setText("tier", tier.charAt(0) + tier.slice(1).toLowerCase() + (sinDiv ? "" : " " + d.rank));
+      setText("lp", d.lp);
+      const on = sinDiv ? 10 : Math.round(Math.max(0, Math.min(100, d.lp)) / 10);
+      const seg = Array.from({length: 10}, (_, k) => `<i class="${k < on ? "on" : ""}"></i>`).join("");
+      if ($("seg").innerHTML !== seg) $("seg").innerHTML = seg;
+
+      // Sesion
+      setText("w", (d.wins_hoy || 0) + "W");
+      setText("l", (d.losses_hoy || 0) + "L");
+      const diff = d.lp_hoy || 0, el = $("lpdiff");
+      el.textContent = (diff > 0 ? "+" : diff < 0 ? "" : "±") + diff + " LP";
+      el.className = diff > 0 ? "pos" : diff < 0 ? "neg" : "zero";
+
+      // Rotacion B: winrate de la temporada
+      const tw = d.wins_temporada || 0, tl = d.losses_temporada || 0, total = tw + tl;
+      setText("wr", total ? Math.round(tw * 100 / total) + "%" : "—");
+      setText("games", total || "-");
+      $("bw").style.width = total ? (tw * 100 / total) + "%" : "50%";
+      $("bl").style.width = total ? (tl * 100 / total) + "%" : "50%";
+
+      // Historial (solo se redibuja si cambio, para no repetir la animacion)
+      const hist = JSON.stringify(d.historial || []);
+      if (hist !== ultimoHist) {
+        ultimoHist = hist;
+        $("hist").innerHTML = (d.historial || []).slice(0, PARTIDAS).map((m, k) => {
+          const cls = m.etiqueta === "MVP" ? "mvp" : m.etiqueta === "ACE" ? "ace" : "";
+          return `<div class="m ${m.win ? "win" : "loss"}" style="animation-delay:${k * .05}s">
+            <img src="${m.img}" alt=""><div class="bar"></div><span class="${cls}">${m.etiqueta}</span></div>`;
+        }).join("");
+      }
+    } catch (e) { console.error(e); }
+  }
+  actualizar();
+  setInterval(actualizar, 3000);
+
+  // Rotacion de la parte de arriba. Con ?slide=1 o ?slide=2 en la ruta queda fija.
+  function mostrar(n) {
+    ["rA", "sA"].forEach(id => $(id).classList.toggle("oculta", n !== 1));
+    ["rB", "sB"].forEach(id => $(id).classList.toggle("oculta", n !== 2));
+    $("i1").classList.toggle("on", n === 1); $("i2").classList.toggle("on", n === 2);
+  }
+  const fija = parseInt(new URLSearchParams(location.search).get("slide"));
+  if (fija === 1 || fija === 2) mostrar(fija);
+  else { let n = 1; mostrar(n); setInterval(() => { n = n === 1 ? 2 : 1; mostrar(n); }, SEGUNDOS * 1000); }
+</script>
+
+<script>
+  /* ================= EFECTO GLITCH (intenso) ================= */
+  const MODO = "intenso";
+  const DURACION = 650;                      // ms que dura el glitch de cada rotacion
+  const PAUSA_MINI = [5, 9];     // cada cuantos segundos hay un mini glitch en el nombre
+  const SIMBOLOS = "█▓▒░#%&@$*+=/<>_-";
+  const wrap = document.querySelector(".wrap"), card = document.querySelector(".card");
+  if (MODO === "intenso") wrap.classList.add("fuerte");
+
+  // capas extra: grano, lineas de barrido y bandas
+  card.insertAdjacentHTML("beforeend", '<div class="grain"></div><div class="scan"></div><div class="tears"><i></i><i></i><i></i><i></i><i></i></div>');
+
+  // Las letras aparecen de a una, con simbolos que se van "acomodando" (10 cuadros por segundo)
+  function revelar(el, ms) {
+    if (!el || el.children.length) return;
+    const final = el._final !== undefined && el._sc ? el._final : el.textContent;
+    el._final = final; clearInterval(el._sc);
+    const pasos = Math.max(3, Math.round(ms / 100)); let k = 0;
+    el._sc = setInterval(() => {
+      k++;
+      const fijas = Math.floor(final.length * k / pasos);
+      el.textContent = final.slice(0, fijas) + [...final.slice(fijas)]
+        .map(c => c === " " ? " " : (Math.random() < .55 ? SIMBOLOS[Math.random() * SIMBOLOS.length | 0] : "")).join("");
+      if (k >= pasos) { clearInterval(el._sc); el._sc = null; el.textContent = final; }
+    }, 100);
+  }
+  function hojas(id) { return [...document.getElementById(id).querySelectorAll("span")].filter(s => !s.children.length); }
+
+  function lanzarGlitch() {
+    wrap.classList.remove("glitch"); void wrap.offsetWidth; wrap.classList.add("glitch");
+    card.querySelectorAll(".tears i").forEach(t => { t.style.top = (8 + Math.random() * 80) + "%"; t.style.height = (2 + Math.random() * (MODO === "intenso" ? 9 : 4)) + "px"; });
+    clearTimeout(wrap._t); wrap._t = setTimeout(() => wrap.classList.remove("glitch"), DURACION);
+  }
+
+  // Reemplaza la rotacion: corte seco en medio del glitch y el texto nuevo se "escribe"
+  function mostrar(n) {
+    lanzarGlitch();
+    setTimeout(() => {
+      ["rA", "sA"].forEach(id => $(id).classList.toggle("oculta", n !== 1));
+      ["rB", "sB"].forEach(id => $(id).classList.toggle("oculta", n !== 2));
+      $("i1").classList.toggle("on", n === 1); $("i2").classList.toggle("on", n === 2);
+      const entra = n === 1 ? ["rA", "sA"] : ["rB", "sB"];
+      entra.forEach(id => hojas(id).forEach(el => revelar(el, MODO === "intenso" ? 500 : 350)));
+    }, 110);
+  }
+
+  // Mini glitch de vez en cuando sobre el nombre
+  const idle = parseFloat(new URLSearchParams(location.search).get("idle"));
+  function programarMini() {
+    const s = idle || (PAUSA_MINI[0] + Math.random() * (PAUSA_MINI[1] - PAUSA_MINI[0]));
+    setTimeout(() => {
+      wrap.classList.remove("mini"); void wrap.offsetWidth; wrap.classList.add("mini");
+      setTimeout(() => wrap.classList.remove("mini"), 320);
+      programarMini();
+    }, s * 1000);
+  }
+  programarMini();
+
+  // Al aparecer, el nombre se escribe letra por letra
+  setTimeout(() => { revelar($("name"), 700); lanzarGlitch(); }, 400);
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+requests
+python-dotenv
+obsws-python
+urllib3
+websocket-client

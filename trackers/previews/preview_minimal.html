@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Preview Minimal</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  /* VISTA PREVIA - estilo minimalista. Lee ./overlay_data.json (no modifica nada). */
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  body { font-family: 'Inter', sans-serif; color: #fff; padding: 24px; }
+  :root { --tier: 46, 204, 113; }
+
+  .card {
+    display: inline-flex; flex-direction: column; gap: 10px;
+    padding: 14px 18px;
+    background: rgba(12, 13, 17, 0.72);
+    border-radius: 12px;
+    border-left: 3px solid rgb(var(--tier));
+  }
+  .row { display: flex; align-items: center; gap: 14px; }
+  .emblem { width: 44px; height: 44px; object-fit: contain; }
+  .name { font-size: 15px; font-weight: 600; line-height: 1; }
+  .name .tag { color: rgba(255,255,255,0.45); font-weight: 500; margin-left: 2px; }
+  .rank { margin-top: 6px; font-size: 14px; font-weight: 500; line-height: 1; color: rgba(255,255,255,0.75); }
+  .rank b { color: rgb(var(--tier)); font-weight: 600; }
+  .sep { width: 1px; align-self: stretch; background: rgba(255,255,255,0.12); }
+  .session { font-size: 15px; font-weight: 600; line-height: 1; }
+  .session .w { color: #4fb3ff; }
+  .session .l { color: #ff4d6d; margin-left: 6px; }
+  .session small { display: block; margin-top: 6px; font-size: 11px; font-weight: 500; color: rgba(255,255,255,0.45); letter-spacing: .04em; text-transform: uppercase; }
+  .dots { display: flex; gap: 5px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,0.15); }
+  .dot.win { background: #4fb3ff; }
+  .dot.loss { background: #ff4d6d; }
+  .dot.mvp { box-shadow: 0 0 0 2px rgba(255, 196, 0, 0.9); }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="row">
+      <img id="emblem" class="emblem" alt="" src="">
+      <div>
+        <div class="name"><span id="name">-</span><span class="tag" id="tag"></span></div>
+        <div class="rank"><b id="tier">-</b> · <span id="lp">0</span> LP</div>
+      </div>
+      <div class="sep"></div>
+      <div class="session">
+        <span class="w" id="wins">0W</span><span class="l" id="losses">0L</span>
+        <small>Session</small>
+      </div>
+    </div>
+    <div class="dots" id="dots"></div>
+  </div>
+
+<script>
+  const COLORES = {
+    IRON:"161,157,148", BRONZE:"205,127,50", SILVER:"189,195,199", GOLD:"241,196,15",
+    PLATINUM:"26,188,156", EMERALD:"46,204,113", DIAMOND:"52,152,219",
+    MASTER:"224,64,251", GRANDMASTER:"231,76,60", CHALLENGER:"243,156,18"
+  };
+  const SIN_DIVISION = ["MASTER", "GRANDMASTER", "CHALLENGER"];
+
+  // Convierte el historial_html que ya genera el tracker en una lista simple
+  function leerHistorial(html) {
+    const doc = new DOMParser().parseFromString(html || "", "text/html");
+    return [...doc.body.children].map(el => {
+      const borde = el.querySelector('[style*="box-shadow"]');
+      const estilo = borde ? borde.getAttribute("style") : "";
+      const etiqueta = (el.querySelector("span") || {}).textContent || "";
+      return { win: estilo.includes("0, 163, 255"), etiqueta: etiqueta.trim() };
+    }).filter(p => p.etiqueta || p.win !== undefined);
+  }
+
+  async function actualizar() {
+    try {
+      const res = await fetch("./overlay_data.json?v=" + Date.now());
+      if (!res.ok) return;
+      const d = await res.json();
+      const tier = (d.tier || "EMERALD").toUpperCase();
+      document.documentElement.style.setProperty("--tier", COLORES[tier] || "255,255,255");
+
+      document.getElementById("emblem").src =
+        `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-emblem/emblem-${tier.toLowerCase()}.png`;
+      document.getElementById("name").textContent = d.riot_id || "-";
+      document.getElementById("tag").textContent = d.riot_tag ? "#" + d.riot_tag : "";
+
+      let texto = tier.charAt(0) + tier.slice(1).toLowerCase();
+      if (!SIN_DIVISION.includes(tier)) texto += " " + d.rank;
+      document.getElementById("tier").textContent = texto;
+      document.getElementById("lp").textContent = d.lp;
+      document.getElementById("wins").textContent = d.wins_hoy + "W";
+      document.getElementById("losses").textContent = d.losses_hoy + "L";
+
+      document.getElementById("dots").innerHTML = leerHistorial(d.historial_html)
+        .map(p => `<span class="dot ${p.win ? "win" : "loss"} ${p.etiqueta === "MVP" ? "mvp" : ""}" title="${p.etiqueta}"></span>`)
+        .join("");
+    } catch (e) { console.error(e); }
+  }
+  actualizar();
+  setInterval(actualizar, 3000);
+</script>
+</body>
+</html>

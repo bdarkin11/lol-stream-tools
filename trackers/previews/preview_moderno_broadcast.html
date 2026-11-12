@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Moderno Broadcast</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=Oxanium:wght@500;600;700;800&display=swap">
+<style>
+  /* VISTA PREVIA - Moderno Broadcast. Lee ./overlay_data.json (no modifica nada). */
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  body { font-family: 'Inter', sans-serif; color: #fff; padding: 28px; }
+  :root { --tier: 46, 204, 113; --win: 0, 163, 255; --loss: 255, 27, 72; }
+  @keyframes entrar { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  @keyframes barrido { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+  .bar { display: inline-flex; align-items: stretch; height: 74px; animation: barrido .6s cubic-bezier(.2,.8,.2,1) both;
+    box-shadow: 0 6px 24px rgba(0,0,0,.5); border-radius: 6px; overflow: hidden; }
+  .blk { display: flex; align-items: center; }
+  .rankblk { gap: 10px; padding: 0 18px 0 12px; background: linear-gradient(135deg, rgb(var(--tier)), rgba(var(--tier), .65)); color: #0b0d12; }
+  .rankblk img { width: 58px; height: 58px; object-fit: contain; filter: drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
+  .rankblk .t { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 20px; line-height: 1; text-transform: uppercase; }
+  .rankblk .lp { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 28px; line-height: 1; }
+  .rankblk .lp small { font-size: 14px; margin-left: 2px; }
+  .nameblk { flex-direction: column; align-items: flex-start; justify-content: center; padding: 0 20px; background: rgba(14,16,22,.94); min-width: 170px; }
+  .nameblk .n { font-family: 'Rajdhani', sans-serif; font-size: 24px; font-weight: 700; line-height: 1; }
+  .nameblk .n small { font-size: 15px; color: rgba(255,255,255,.45); margin-left: 3px; }
+  .nameblk .s { margin-top: 6px; font-size: 12px; font-weight: 600; color: rgba(255,255,255,.6); letter-spacing: .06em; }
+  .nameblk .s b.w { color: rgb(var(--win)); } .nameblk .s b.l { color: rgb(var(--loss)); }
+  .histblk { gap: 4px; padding: 0 14px; background: rgba(22,25,33,.94); border-left: 1px solid rgba(255,255,255,.06); }
+  .m { position: relative; width: 34px; height: 46px; border-radius: 4px; overflow: hidden; animation: entrar .35s ease-out both; }
+  .m img { width: 34px; height: 34px; display: block; object-fit: cover; }
+  .m span { display: block; height: 12px; line-height: 12px; text-align: center; font-size: 8px; font-weight: 800; color: #fff; }
+  .m.win span { background: rgb(var(--win)); } .m.loss span { background: rgb(var(--loss)); }
+  .m.loss img { filter: saturate(.5) brightness(.8); }
+  .m span.mvp { background: #f5b800; color: #111; } .m span.ace { background: #a855f7; }
+
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="blk rankblk">
+    <img id="emb" alt="">
+    <div><div class="t" id="tier">-</div><div class="lp"><span id="lp">0</span><small>LP</small></div></div>
+  </div>
+  <div class="blk nameblk">
+    <div class="n"><span id="name">-</span><small id="tag"></small></div>
+    <div class="s">SESSION &nbsp;<b class="w" id="w">0W</b> &nbsp;<b class="l" id="l">0L</b></div>
+  </div>
+  <div class="blk histblk" id="hist"></div>
+</div>
+
+<script>
+
+  const COLORES = {
+    IRON:"161,157,148", BRONZE:"205,127,50", SILVER:"189,195,199", GOLD:"241,196,15",
+    PLATINUM:"26,188,156", EMERALD:"46,204,113", DIAMOND:"52,152,219",
+    MASTER:"224,64,251", GRANDMASTER:"231,76,60", CHALLENGER:"243,156,18"
+  };
+  const SIN_DIVISION = ["MASTER", "GRANDMASTER", "CHALLENGER"];
+  const $ = id => document.getElementById(id);
+
+  // Convierte el historial_html que ya genera el tracker en una lista simple
+  function leerHistorial(html) {
+    const doc = new DOMParser().parseFromString(html || "", "text/html");
+    return [...doc.body.children].map(el => {
+      const img = el.querySelector("img");
+      const borde = el.querySelector('[style*="box-shadow"]');
+      const estilo = borde ? borde.getAttribute("style") : "";
+      const etiqueta = ((el.querySelector("span") || {}).textContent || "").trim();
+      return { img: img ? img.getAttribute("src") : "", win: estilo.includes("0, 163, 255"), etiqueta };
+    }).filter(p => p.img);
+  }
+  function claseEtiqueta(e) { return e === "MVP" ? "mvp" : e === "ACE" ? "ace" : ""; }
+
+  let ultimoHist = null;
+  async function actualizar() {
+    try {
+      const res = await fetch("./overlay_data.json?v=" + Date.now());
+      if (!res.ok) return;
+      const d = await res.json();
+      const tier = (d.tier || "EMERALD").toUpperCase();
+      const sinDiv = SIN_DIVISION.includes(tier);
+      document.documentElement.style.setProperty("--tier", COLORES[tier] || "255,255,255");
+      const info = {
+        tier, sinDiv,
+        tierTexto: tier + (sinDiv ? "" : " " + d.rank),
+        tierCorto: tier.charAt(0) + tier.slice(1).toLowerCase() + (sinDiv ? "" : " " + d.rank),
+        icono: `https://ddragon.leagueoflegends.com/cdn/${d.latest_patch}/img/profileicon/${d.profile_icon_id}.png`,
+        emblema: `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-emblem/emblem-${tier.toLowerCase()}.png`,
+        pct: Math.max(0, Math.min(100, d.lp))
+      };
+      render(d, info);
+      if (d.historial_html !== ultimoHist) {
+        ultimoHist = d.historial_html;
+        renderHistorial(leerHistorial(d.historial_html));
+      }
+    } catch (e) { console.error(e); }
+  }
+  function setText(id, v) { const el = $(id); if (el) el.textContent = v; }
+  function setSrc(id, v) { const el = $(id); if (el && el.getAttribute("src") !== v) el.src = v; }
+  actualizar();
+  setInterval(actualizar, 3000);
+
+
+  function render(d, i) {
+    setSrc("emb", i.emblema);
+    setText("tier", i.tierTexto); setText("lp", d.lp);
+    setText("name", d.riot_id || "-"); setText("tag", d.riot_tag ? "#" + d.riot_tag : "");
+    setText("w", d.wins_hoy + "W"); setText("l", d.losses_hoy + "L");
+  }
+  function renderHistorial(p) {
+    $("hist").innerHTML = p.map((m, k) => `<div class="m ${m.win ? "win" : "loss"}" style="animation-delay:${.4 + k*.05}s">
+      <img src="${m.img}" alt=""><span class="${claseEtiqueta(m.etiqueta)}">${m.etiqueta}</span></div>`).join("");
+  }
+
+</script>
+</body>
+</html>

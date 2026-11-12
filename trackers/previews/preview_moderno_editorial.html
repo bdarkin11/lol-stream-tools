@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Moderno Editorial</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..900&display=swap">
+<style>
+  /* VISTA PREVIA - Moderno Editorial v2. Lee ./overlay_data.json (no modifica nada). */
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  body { font-family: 'Archivo', 'Inter Display', 'Inter', sans-serif; color: #f1efe9; padding: 28px; }
+  :root { --tier: 46, 204, 113; --win: 0, 163, 255; --loss: 255, 27, 72; --ink: 241, 239, 233; }
+  @keyframes entrar { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes latido { 0%,100% { box-shadow: 0 0 0 0 rgba(var(--tier), .55); } 50% { box-shadow: 0 0 0 5px rgba(var(--tier), 0); } }
+
+  .card {
+    position: relative; display: inline-block; min-width: 470px; padding: 18px 22px 16px;
+    background: rgba(40, 40, 42, 0.94);
+    clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+    animation: entrar .5s ease-out both;
+  }
+  .card::before { content: ""; position: absolute; inset: 0; pointer-events: none; padding: 1px;
+    background: linear-gradient(135deg, rgba(var(--tier), .9) 0 6%, rgba(var(--ink), .12) 14% 86%, rgba(var(--tier), .9) 94%);
+    clip-path: inherit;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+
+  /* ---- Fila 1: nombre + rango + escudo ---- */
+  .head { display: flex; align-items: center; gap: 18px; }
+  .name { font-size: 56px; font-weight: 900; font-stretch: 112%; letter-spacing: -0.02em; line-height: .9; white-space: nowrap; }
+  .vline { width: 1px; align-self: stretch; margin: 4px 0; background: rgba(var(--ink), .3); }
+  .rank { display: flex; flex-direction: column; gap: 6px; }
+  .rank .t { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 700; line-height: 1; white-space: nowrap; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: rgb(var(--tier)); animation: latido 2.6s ease-in-out infinite; }
+  .rank .lp { font-size: 13px; font-weight: 500; color: rgba(var(--ink), .65); line-height: 1; }
+  .seg { display: flex; gap: 3px; }
+  .seg i { width: 9px; height: 5px; background: rgba(var(--ink), .12); transform: skewX(-20deg); }
+  .seg i.on { background: rgb(var(--tier)); box-shadow: 0 0 5px rgba(var(--tier), .6); }
+
+  /* escudo oficial recortado (las imagenes de Riot traen mucho borde transparente) */
+  .embbox { position: relative; margin-left: auto; width: 76px; height: 76px; flex-shrink: 0;
+    border: 1.5px solid rgba(var(--ink), .7); border-radius: 4px; }
+  .embbox::after { content: ""; position: absolute; inset: 5px -7px -7px 5px; border: 1.5px solid rgba(var(--ink), .3); border-radius: 4px; z-index: -1; }
+  .crop { position: absolute; inset: 3px; overflow: hidden; }
+  .crop img { position: absolute; max-width: none; filter: drop-shadow(0 0 4px rgba(var(--tier), .5)); }
+
+  .rule { height: 1px; background: rgba(var(--ink), .22); margin: 14px 0; }
+
+  /* ---- Fila 2: sesion ---- */
+  .ses { display: flex; align-items: center; gap: 26px; }
+  .ses .title { font-size: 17px; font-weight: 800; font-stretch: 110%; line-height: 1; }
+  .ses .title span { font-weight: 400; color: rgba(var(--ink), .6); margin-left: 8px; padding-left: 10px; border-left: 1px solid rgba(var(--ink), .35); }
+  .kv { font-size: 11px; line-height: 1; color: rgba(var(--ink), .55); }
+  .kv b { display: block; margin-top: 5px; font-size: 17px; font-weight: 700; color: rgb(var(--ink)); }
+  .kv b .w { color: rgb(var(--win)); } .kv b .l { color: rgb(var(--loss)); }
+  .ses .push { margin-left: auto; }
+
+  /* ---- Fila 3 (base): partidas ---- */
+  .hist { display: flex; gap: 5px; }
+  .m { flex: 1; min-width: 36px; max-width: 42px; text-align: center; animation: entrar .35s ease-out both; }
+  .m img { width: 100%; aspect-ratio: 1; display: block; object-fit: cover;
+    clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px); }
+  .m .bar { height: 3px; margin-top: 3px; }
+  .m.win .bar { background: rgb(var(--win)); } .m.loss .bar { background: rgb(var(--loss)); }
+  .m.loss img { filter: grayscale(.55) brightness(.8); }
+  .m span { display: block; margin-top: 3px; font-size: 10px; font-weight: 600; color: rgba(var(--ink), .6); }
+  .m span.mvp { color: #ffc93c; } .m span.ace { color: #b79cff; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="head">
+    <div class="name" id="name">-</div>
+    <div class="vline"></div>
+    <div class="rank">
+      <div class="t"><span id="tier">-</span><span class="dot"></span></div>
+      <div class="lp"><span id="lp">0</span> LP</div>
+      <div class="seg" id="seg"></div>
+    </div>
+    <div class="embbox"><div class="crop"><img id="emb" alt=""></div></div>
+  </div>
+
+  <div class="rule"></div>
+
+  <div class="ses">
+    <div class="title">Session<span>Hoy</span></div>
+    <div class="kv push">Resultado<b><span class="w" id="w">0W</span> · <span class="l" id="l">0L</span></b></div>
+    <div class="kv">MVP<b id="mvps">0</b></div>
+    <div class="kv">Parche<b id="patch">-</b></div>
+  </div>
+
+  <div class="rule"></div>
+
+  <div class="hist" id="hist"></div>
+</div>
+<script>
+
+  const COLORES = {
+    IRON:"161,157,148", BRONZE:"205,127,50", SILVER:"189,195,199", GOLD:"241,196,15",
+    PLATINUM:"26,188,156", EMERALD:"46,204,113", DIAMOND:"52,152,219",
+    MASTER:"224,64,251", GRANDMASTER:"231,76,60", CHALLENGER:"243,156,18"
+  };
+  const SIN_DIVISION = ["MASTER", "GRANDMASTER", "CHALLENGER"];
+  const $ = id => document.getElementById(id);
+
+  // Convierte el historial_html que ya genera el tracker en una lista simple
+  function leerHistorial(html) {
+    const doc = new DOMParser().parseFromString(html || "", "text/html");
+    return [...doc.body.children].map(el => {
+      const img = el.querySelector("img");
+      const borde = el.querySelector('[style*="box-shadow"]');
+      const estilo = borde ? borde.getAttribute("style") : "";
+      const etiqueta = ((el.querySelector("span") || {}).textContent || "").trim();
+      return { img: img ? img.getAttribute("src") : "", win: estilo.includes("0, 163, 255"), etiqueta };
+    }).filter(p => p.img);
+  }
+  function claseEtiqueta(e) { return e === "MVP" ? "mvp" : e === "ACE" ? "ace" : ""; }
+
+  let ultimoHist = null;
+  async function actualizar() {
+    try {
+      const res = await fetch("./overlay_data.json?v=" + Date.now());
+      if (!res.ok) return;
+      const d = await res.json();
+      const tier = (d.tier || "EMERALD").toUpperCase();
+      const sinDiv = SIN_DIVISION.includes(tier);
+      document.documentElement.style.setProperty("--tier", COLORES[tier] || "255,255,255");
+      const info = {
+        tier, sinDiv,
+        tierTexto: tier + (sinDiv ? "" : " " + d.rank),
+        tierCorto: tier.charAt(0) + tier.slice(1).toLowerCase() + (sinDiv ? "" : " " + d.rank),
+        icono: `https://ddragon.leagueoflegends.com/cdn/${d.latest_patch}/img/profileicon/${d.profile_icon_id}.png`,
+        emblema: `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-emblem/emblem-${tier.toLowerCase()}.png`,
+        pct: Math.max(0, Math.min(100, d.lp))
+      };
+      render(d, info);
+      if (d.historial_html !== ultimoHist) {
+        ultimoHist = d.historial_html;
+        renderHistorial(leerHistorial(d.historial_html));
+      }
+    } catch (e) { console.error(e); }
+  }
+  function setText(id, v) { const el = $(id); if (el) el.textContent = v; }
+  function setSrc(id, v) { const el = $(id); if (el && el.getAttribute("src") !== v) el.src = v; }
+  actualizar();
+  setInterval(actualizar, 3000);
+
+  // Zona visible de cada escudo oficial: [ancho, alto, x1, y1, x2, y2] de la imagen
+  const RECORTE = {
+    IRON:[1280,720,544,298,738,414], BRONZE:[1280,720,524,276,756,428], SILVER:[1280,720,512,248,766,426],
+    GOLD:[1280,720,512,238,766,452], PLATINUM:[2560,1440,1018,448,1542,890], EMERALD:[2560,1440,992,460,1570,888],
+    DIAMOND:[1280,720,486,264,796,448], MASTER:[1280,720,492,238,788,452], GRANDMASTER:[1280,720,486,242,794,462],
+    CHALLENGER:[1280,720,482,220,800,458]
+  };
+  function encuadrarEscudo(tier) {
+    const img = $("emb"), caja = img.parentElement;
+    const r = RECORTE[tier]; if (!r) return;
+    const [W, H, x1, y1, x2, y2] = r;
+    const bw = x2 - x1, bh = y2 - y1, cw = caja.clientWidth, ch = caja.clientHeight;
+    const s = Math.min(cw / bw, ch / bh);
+    img.style.width = (W * s) + "px"; img.style.height = (H * s) + "px";
+    img.style.left = ((cw - bw * s) / 2 - x1 * s) + "px";
+    img.style.top = ((ch - bh * s) / 2 - y1 * s) + "px";
+  }
+
+  function render(d, i) {
+    setSrc("emb", i.emblema); encuadrarEscudo(i.tier);
+    setText("name", d.riot_id || "-");
+    setText("tier", i.tierCorto);
+    setText("lp", d.lp);
+    setText("w", d.wins_hoy + "W"); setText("l", d.losses_hoy + "L");
+    setText("patch", (d.latest_patch || "-").split(".").slice(0, 2).join("."));
+    const on = i.sinDiv ? 10 : Math.round(i.pct / 10);
+    $("seg").innerHTML = Array.from({length: 10}, (_, k) => `<i class="${k < on ? "on" : ""}"></i>`).join("");
+  }
+  function renderHistorial(p) {
+    setText("mvps", p.filter(m => m.etiqueta === "MVP").length);
+    $("hist").innerHTML = p.map((m, k) => `<div class="m ${m.win ? "win" : "loss"}" style="animation-delay:${k*.05}s">
+      <img src="${m.img}" alt=""><div class="bar"></div><span class="${claseEtiqueta(m.etiqueta)}">${m.etiqueta}</span></div>`).join("");
+  }
+</script>
+</body>
+</html>

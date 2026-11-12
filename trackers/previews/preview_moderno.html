@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Preview Moderno</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@500;600;700&display=swap">
+<style>
+  /* VISTA PREVIA - estilo moderno. Lee ./overlay_data.json (no modifica nada). */
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  body { font-family: 'Inter', sans-serif; color: #fff; padding: 28px; }
+  :root { --tier: 46, 204, 113; }
+
+  @keyframes entrar { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes brillo { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+
+  .card {
+    position: relative; display: inline-flex; flex-direction: column; gap: 14px;
+    padding: 16px 20px 16px 16px; border-radius: 16px;
+    background: linear-gradient(135deg, rgba(var(--tier), 0.18), rgba(14, 16, 22, 0.78) 45%);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(var(--tier), 0.35);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08);
+    animation: entrar .5s ease-out both;
+  }
+  .card::before {
+    content: ""; position: absolute; inset: -1px; border-radius: 16px; pointer-events: none;
+    box-shadow: 0 0 22px rgba(var(--tier), 0.35); animation: brillo 3s ease-in-out infinite;
+  }
+  .top { display: flex; align-items: center; gap: 16px; }
+
+  .avatar { position: relative; width: 64px; height: 64px; flex-shrink: 0; }
+  .avatar img.icon { width: 64px; height: 64px; border-radius: 50%; border: 2px solid rgb(var(--tier)); }
+  .avatar img.emblem { position: absolute; width: 38px; height: 38px; right: -12px; bottom: -10px; object-fit: contain;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,.6)); }
+
+  .info { min-width: 190px; }
+  .name { font-family: 'Rajdhani', sans-serif; font-size: 22px; font-weight: 700; line-height: 1; letter-spacing: .02em; }
+  .name .tag { font-size: 15px; color: rgba(255,255,255,0.5); margin-left: 3px; }
+  .rank { margin-top: 5px; display: flex; align-items: baseline; gap: 8px; }
+  .rank .tier { font-family: 'Rajdhani', sans-serif; font-size: 18px; font-weight: 700; color: rgb(var(--tier)); text-transform: uppercase; letter-spacing: .05em; }
+  .rank .lp { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.85); }
+  .bar { margin-top: 7px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.1); overflow: hidden; }
+  .bar span { display: block; height: 100%; border-radius: 3px; width: 0;
+    background: linear-gradient(90deg, rgba(var(--tier), .6), rgb(var(--tier))); transition: width .8s ease; }
+
+  .session { display: flex; gap: 6px; margin-left: 4px; }
+  .chip { min-width: 46px; padding: 8px 8px 7px; border-radius: 10px; text-align: center;
+    font-family: 'Rajdhani', sans-serif; font-size: 22px; font-weight: 700; line-height: 1; }
+  .chip small { display: block; margin-top: 3px; font-family: 'Inter', sans-serif; font-size: 9px; font-weight: 600; letter-spacing: .08em; opacity: .7; }
+  .chip.w { background: rgba(0, 163, 255, 0.16); color: #5cc2ff; border: 1px solid rgba(0,163,255,.35); }
+  .chip.l { background: rgba(255, 27, 72, 0.14); color: #ff5c7a; border: 1px solid rgba(255,27,72,.35); }
+
+  .history { display: flex; gap: 5px; }
+  .match { display: flex; flex-direction: column; align-items: center; gap: 3px; animation: entrar .35s ease-out both; }
+  .match img { width: 30px; height: 30px; border-radius: 8px; object-fit: cover; }
+  .match .line { width: 100%; height: 3px; border-radius: 2px; }
+  .match.win .line { background: #00a3ff; }
+  .match.loss .line { background: #ff1b48; }
+  .match.loss img { filter: saturate(.55) brightness(.85); }
+  .match .lbl { font-size: 9px; font-weight: 700; color: rgba(255,255,255,0.6); }
+  .match .lbl.mvp { color: #ffc400; }
+  .match .lbl.ace { color: #c084fc; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="top">
+      <div class="avatar">
+        <img id="icon" class="icon" alt="" src="">
+        <img id="emblem" class="emblem" alt="" src="">
+      </div>
+      <div class="info">
+        <div class="name"><span id="name">-</span><span class="tag" id="tag"></span></div>
+        <div class="rank"><span class="tier" id="tier">-</span><span class="lp" id="lp">0 LP</span></div>
+        <div class="bar" id="barWrap"><span id="bar"></span></div>
+      </div>
+      <div class="session">
+        <div class="chip w"><span id="wins">0</span><small>WINS</small></div>
+        <div class="chip l"><span id="losses">0</span><small>LOSSES</small></div>
+      </div>
+    </div>
+    <div class="history" id="history"></div>
+  </div>
+
+<script>
+  const COLORES = {
+    IRON:"161,157,148", BRONZE:"205,127,50", SILVER:"189,195,199", GOLD:"241,196,15",
+    PLATINUM:"26,188,156", EMERALD:"46,204,113", DIAMOND:"52,152,219",
+    MASTER:"224,64,251", GRANDMASTER:"231,76,60", CHALLENGER:"243,156,18"
+  };
+  const SIN_DIVISION = ["MASTER", "GRANDMASTER", "CHALLENGER"];
+
+  // Convierte el historial_html que ya genera el tracker en una lista simple
+  function leerHistorial(html) {
+    const doc = new DOMParser().parseFromString(html || "", "text/html");
+    return [...doc.body.children].map(el => {
+      const img = el.querySelector("img");
+      const borde = el.querySelector('[style*="box-shadow"]');
+      const estilo = borde ? borde.getAttribute("style") : "";
+      const etiqueta = ((el.querySelector("span") || {}).textContent || "").trim();
+      return { img: img ? img.getAttribute("src") : "", win: estilo.includes("0, 163, 255"), etiqueta };
+    }).filter(p => p.img);
+  }
+
+  let ultimoHist = "";
+  async function actualizar() {
+    try {
+      const res = await fetch("./overlay_data.json?v=" + Date.now());
+      if (!res.ok) return;
+      const d = await res.json();
+      const tier = (d.tier || "EMERALD").toUpperCase();
+      document.documentElement.style.setProperty("--tier", COLORES[tier] || "255,255,255");
+
+      document.getElementById("icon").src =
+        `https://ddragon.leagueoflegends.com/cdn/${d.latest_patch}/img/profileicon/${d.profile_icon_id}.png`;
+      document.getElementById("emblem").src =
+        `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-emblem/emblem-${tier.toLowerCase()}.png`;
+      document.getElementById("name").textContent = d.riot_id || "-";
+      document.getElementById("tag").textContent = d.riot_tag ? "#" + d.riot_tag : "";
+
+      const sinDiv = SIN_DIVISION.includes(tier);
+      document.getElementById("tier").textContent = tier + (sinDiv ? "" : " " + d.rank);
+      document.getElementById("lp").textContent = d.lp + " LP";
+      document.getElementById("barWrap").style.display = sinDiv ? "none" : "block";
+      document.getElementById("bar").style.width = Math.max(0, Math.min(100, d.lp)) + "%";
+      document.getElementById("wins").textContent = d.wins_hoy;
+      document.getElementById("losses").textContent = d.losses_hoy;
+
+      if (d.historial_html !== ultimoHist) {
+        ultimoHist = d.historial_html;
+        document.getElementById("history").innerHTML = leerHistorial(d.historial_html).map((p, i) => {
+          const cls = p.etiqueta === "MVP" ? "mvp" : p.etiqueta === "ACE" ? "ace" : "";
+          return `<div class="match ${p.win ? "win" : "loss"}" style="animation-delay:${i * 0.05}s">
+                    <img src="${p.img}" alt=""><span class="line"></span><span class="lbl ${cls}">${p.etiqueta}</span>
+                  </div>`;
+        }).join("");
+      }
+    } catch (e) { console.error(e); }
+  }
+  actualizar();
+  setInterval(actualizar, 3000);
+</script>
+</body>
+</html>

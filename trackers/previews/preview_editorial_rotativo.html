@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Editorial Rotativo</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..900&display=swap">
+<style>
+  /* VISTA PREVIA - Editorial rotativo. Dos pantallas que se alternan:
+     1) principal: escudo, nombre + tag, elo, ultimas 7 partidas
+     2) sesion: victorias/derrotas, winrate, MVP
+     Lee ./overlay_data.json (no modifica nada). */
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  body { font-family: 'Archivo', 'Inter Display', 'Inter', sans-serif; color: #f1efe9; padding: 28px; }
+  :root { --tier: 46, 204, 113; --win: 0, 163, 255; --loss: 255, 27, 72; --ink: 241, 239, 233; }
+  @keyframes entrar { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes latido { 0%,100% { box-shadow: 0 0 0 0 rgba(var(--tier), .55); } 50% { box-shadow: 0 0 0 5px rgba(var(--tier), 0); } }
+
+  .card {
+    position: relative; width: 470px; height: 262px; padding: 18px 22px 16px; box-sizing: border-box;
+    background: rgba(40, 40, 42, 0.94);
+    clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+  }
+  .card::before { content: ""; position: absolute; inset: 0; pointer-events: none; padding: 1px; z-index: 5;
+    background: linear-gradient(135deg, rgba(var(--tier), .9) 0 6%, rgba(var(--ink), .12) 14% 86%, rgba(var(--tier), .9) 94%);
+    clip-path: inherit;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+
+  /* --- rotacion --- */
+  .slide { position: absolute; inset: 18px 22px 16px; transition: opacity .6s ease, transform .6s ease; }
+  .slide.oculta { opacity: 0; transform: translateX(16px); pointer-events: none; }
+  .indic { position: absolute; right: 22px; bottom: 12px; display: flex; gap: 4px; z-index: 6; }
+  .indic i { width: 14px; height: 3px; background: rgba(var(--ink), .2); transition: background .4s; }
+  .indic i.on { background: rgb(var(--tier)); }
+
+  .pill { display: inline-block; padding: 3px 10px 4px; border: 1px solid rgba(var(--ink), .45); border-radius: 20px;
+    font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: rgba(var(--ink), .8); line-height: 1; }
+  .rule { height: 1px; background: rgba(var(--ink), .22); }
+
+  /* ===== Pantalla 1: principal ===== */
+  .p1 .top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .embbox { position: relative; width: 58px; height: 58px; border: 1.5px solid rgba(var(--ink), .7); border-radius: 4px;
+    display: flex; align-items: center; justify-content: center; }
+  .embbox::after { content: ""; position: absolute; inset: 4px -6px -6px 4px; border: 1.5px solid rgba(var(--ink), .3); border-radius: 4px; z-index: -1; }
+  .embbox img { width: 46px; height: 46px; object-fit: contain; filter: drop-shadow(0 0 6px rgba(var(--tier), .55)); }
+  .name { margin-top: -10px; font-size: 50px; font-weight: 900; font-stretch: 112%; letter-spacing: -0.02em; line-height: .95; white-space: nowrap; }
+  .name .tag { font-size: 22px; font-weight: 500; font-stretch: 100%; letter-spacing: 0; color: rgba(var(--ink), .55); margin-left: 6px; }
+  .rankrow { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+  .rank { font-size: 17px; font-weight: 800; line-height: 1; }
+  .rank .lp { font-weight: 500; color: rgba(var(--ink), .65); margin-left: 6px; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; background: rgb(var(--tier)); animation: latido 2.6s ease-in-out infinite; }
+  .seg { display: flex; gap: 3px; margin-left: auto; }
+  .seg i { width: 13px; height: 6px; background: rgba(var(--ink), .12); transform: skewX(-20deg); }
+  .seg i.on { background: rgb(var(--tier)); box-shadow: 0 0 5px rgba(var(--tier), .6); }
+  .p1 .rule { margin: 13px 0 11px; }
+  .hist { display: flex; gap: 7px; }
+  .m { width: 46px; text-align: center; }
+  .slide:not(.oculta) .m { animation: entrar .35s ease-out both; }
+  .m img { width: 46px; height: 46px; display: block; object-fit: cover;
+    clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); }
+  .m .bar { height: 3px; margin-top: 3px; }
+  .m.win .bar { background: rgb(var(--win)); } .m.loss .bar { background: rgb(var(--loss)); }
+  .m.loss img { filter: grayscale(.55) brightness(.8); }
+  .m span { display: block; margin-top: 3px; font-size: 10px; font-weight: 600; color: rgba(var(--ink), .6); }
+  .m span.mvp { color: #ffc93c; } .m span.ace { color: #b79cff; }
+
+  /* ===== Pantalla 2: sesion ===== */
+  .p2 .top { display: flex; gap: 6px; align-items: center; }
+  .p2 .top .who { margin-left: auto; font-size: 13px; font-weight: 700; color: rgba(var(--ink), .7); }
+  .score { display: flex; align-items: baseline; gap: 14px; margin-top: 12px; }
+  .big { font-size: 74px; font-weight: 900; font-stretch: 115%; letter-spacing: -0.03em; line-height: .85; }
+  .big small { font-size: 26px; font-weight: 800; margin-left: 2px; }
+  .big.w { color: rgb(var(--win)); } .big.l { color: rgb(var(--loss)); }
+  .dash { font-size: 50px; font-weight: 300; color: rgba(var(--ink), .3); line-height: .85; }
+  .wrbar { display: flex; height: 6px; margin-top: 14px; background: rgba(var(--ink), .12); }
+  .wrbar .bw { background: rgb(var(--win)); transition: width .8s ease; }
+  .wrbar .bl { background: rgb(var(--loss)); transition: width .8s ease; }
+  .p2 .rule { margin: 14px 0 10px; }
+  .stats { display: flex; gap: 34px; }
+  .kv { font-size: 11px; line-height: 1.2; color: rgba(var(--ink), .55); text-transform: uppercase; letter-spacing: .05em; }
+  .kv b { display: block; margin-top: 3px; font-size: 24px; font-weight: 800; font-stretch: 110%; letter-spacing: 0; text-transform: none; color: rgb(var(--ink)); }
+  .kv b.mvp { color: #ffc93c; }
+</style>
+</head>
+<body>
+<div class="card">
+
+  <!-- Pantalla 1: principal -->
+  <div class="slide p1" id="s1">
+    <div class="top">
+      <span class="pill">Ranked Solo</span>
+      <div class="embbox"><img id="emb" alt=""></div>
+    </div>
+    <div class="name"><span id="name">-</span><span class="tag" id="tag"></span></div>
+    <div class="rankrow">
+      <div class="rank"><span id="tier">-</span><span class="lp"><span id="lp">0</span> LP</span></div>
+      <div class="dot"></div>
+      <div class="seg" id="seg"></div>
+    </div>
+    <div class="rule"></div>
+    <div class="hist" id="hist"></div>
+  </div>
+
+  <!-- Pantalla 2: sesion -->
+  <div class="slide p2 oculta" id="s2">
+    <div class="top"><span class="pill">Session</span><span class="pill">Hoy</span><span class="who" id="who2">-</span></div>
+    <div class="score">
+      <div class="big w"><span id="w">0</span><small>W</small></div>
+      <div class="dash">/</div>
+      <div class="big l"><span id="l">0</span><small>L</small></div>
+    </div>
+    <div class="wrbar"><div class="bw" id="bw" style="width:0"></div><div class="bl" id="bl" style="width:0"></div></div>
+    <div class="rule"></div>
+    <div class="stats">
+      <div class="kv">Winrate<b id="wr">—</b></div>
+      <div class="kv">Partidas<b id="games">0</b></div>
+      <div class="kv">MVP · últimas 10<b class="mvp" id="mvps">0</b></div>
+    </div>
+  </div>
+
+  <div class="indic"><i id="i1" class="on"></i><i id="i2"></i></div>
+</div>
+<script>
+
+  const COLORES = {
+    IRON:"161,157,148", BRONZE:"205,127,50", SILVER:"189,195,199", GOLD:"241,196,15",
+    PLATINUM:"26,188,156", EMERALD:"46,204,113", DIAMOND:"52,152,219",
+    MASTER:"224,64,251", GRANDMASTER:"231,76,60", CHALLENGER:"243,156,18"
+  };
+  const SIN_DIVISION = ["MASTER", "GRANDMASTER", "CHALLENGER"];
+  const $ = id => document.getElementById(id);
+
+  // Convierte el historial_html que ya genera el tracker en una lista simple
+  function leerHistorial(html) {
+    const doc = new DOMParser().parseFromString(html || "", "text/html");
+    return [...doc.body.children].map(el => {
+      const img = el.querySelector("img");
+      const borde = el.querySelector('[style*="box-shadow"]');
+      const estilo = borde ? borde.getAttribute("style") : "";
+      const etiqueta = ((el.querySelector("span") || {}).textContent || "").trim();
+      return { img: img ? img.getAttribute("src") : "", win: estilo.includes("0, 163, 255"), etiqueta };
+    }).filter(p => p.img);
+  }
+  function claseEtiqueta(e) { return e === "MVP" ? "mvp" : e === "ACE" ? "ace" : ""; }
+
+  let ultimoHist = null;
+  async function actualizar() {
+    try {
+      const res = await fetch("./overlay_data.json?v=" + Date.now());
+      if (!res.ok) return;
+      const d = await res.json();
+      const tier = (d.tier || "EMERALD").toUpperCase();
+      const sinDiv = SIN_DIVISION.includes(tier);
+      document.documentElement.style.setProperty("--tier", COLORES[tier] || "255,255,255");
+      const info = {
+        tier, sinDiv,
+        tierTexto: tier + (sinDiv ? "" : " " + d.rank),
+        tierCorto: tier.charAt(0) + tier.slice(1).toLowerCase() + (sinDiv ? "" : " " + d.rank),
+        icono: `https://ddragon.leagueoflegends.com/cdn/${d.latest_patch}/img/profileicon/${d.profile_icon_id}.png`,
+        emblema: `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-emblem/emblem-${tier.toLowerCase()}.png`,
+        pct: Math.max(0, Math.min(100, d.lp))
+      };
+      render(d, info);
+      if (d.historial_html !== ultimoHist) {
+        ultimoHist = d.historial_html;
+        renderHistorial(leerHistorial(d.historial_html));
+      }
+    } catch (e) { console.error(e); }
+  }
+  function setText(id, v) { const el = $(id); if (el) el.textContent = v; }
+  function setSrc(id, v) { const el = $(id); if (el && el.getAttribute("src") !== v) el.src = v; }
+  actualizar();
+  setInterval(actualizar, 3000);
+
+  const ULTIMAS = 7;          // partidas que se muestran en la pantalla principal
+  const SEG_PRINCIPAL = 12;   // segundos en la pantalla principal
+  const SEG_SESION = 7;       // segundos en la pantalla de sesion
+
+  function render(d, i) {
+    setSrc("emb", i.emblema);
+    setText("name", d.riot_id || "-");
+    setText("tag", d.riot_tag ? "#" + d.riot_tag : "");
+    setText("who2", (d.riot_id || "") + (d.riot_tag ? " #" + d.riot_tag : ""));
+    setText("tier", i.tierCorto);
+    setText("lp", d.lp);
+    const on = i.sinDiv ? 10 : Math.round(i.pct / 10);
+    $("seg").innerHTML = Array.from({length: 10}, (_, k) => `<i class="${k < on ? "on" : ""}"></i>`).join("");
+
+    const w = d.wins_hoy || 0, l = d.losses_hoy || 0, total = w + l;
+    setText("w", w); setText("l", l); setText("games", total);
+    setText("wr", total ? Math.round(w * 100 / total) + "%" : "—");
+    $("bw").style.width = total ? (w * 100 / total) + "%" : "0";
+    $("bl").style.width = total ? (l * 100 / total) + "%" : "0";
+  }
+  function renderHistorial(p) {
+    setText("mvps", p.filter(m => m.etiqueta === "MVP").length);
+    $("hist").innerHTML = p.slice(0, ULTIMAS).map((m, k) => `<div class="m ${m.win ? "win" : "loss"}" style="animation-delay:${k*.05}s">
+      <img src="${m.img}" alt=""><div class="bar"></div><span class="${claseEtiqueta(m.etiqueta)}">${m.etiqueta}</span></div>`).join("");
+  }
+
+  // Rotacion entre pantallas. Con ?slide=1 o ?slide=2 en la URL queda fija (util para probar).
+  function mostrar(n) {
+    $("s1").classList.toggle("oculta", n !== 1);
+    $("s2").classList.toggle("oculta", n !== 2);
+    $("i1").classList.toggle("on", n === 1);
+    $("i2").classList.toggle("on", n === 2);
+  }
+  const fija = parseInt(new URLSearchParams(location.search).get("slide"));
+  if (fija === 1 || fija === 2) {
+    mostrar(fija);
+  } else {
+    let actual = 1;
+    (function ciclo() {
+      mostrar(actual);
+      setTimeout(() => { actual = actual === 1 ? 2 : 1; ciclo(); }, (actual === 1 ? SEG_PRINCIPAL : SEG_SESION) * 1000);
+    })();
+  }
+</script>
+</body>
+</html>
