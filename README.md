@@ -2,10 +2,20 @@
 
 Herramientas en Python para streamear League of Legends y TFT. Resuelven un problema concreto: mostrar en stream el rango, los LP y el historial de la sesion sin actualizarlos a mano, y no perderse ningun multikill sin clipear.
 
-## Live Deployment
+## Demo
 
-> **Demo:** `[AGREGAR LINK A CLIP O VIDEO DEL OVERLAY EN VIVO]`
->
+**Overlay en OBS** (rango, LP, winrate y ultimas partidas, con rotacion y efecto glitch):
+
+![Overlay en OBS](docs/demo-overlay.gif)
+
+**Clip automatico en una triple kill:** el bot detecta el multikill con la Live Client Data API, crea el clip en Twitch y publica el link en el chat.
+
+![Triple kill en stream](docs/demo-triple-kill.gif)
+
+![Mensajes del bot en el chat](docs/demo-chat-bot.png)
+
+Videos completos: [overlay](docs/demo-overlay.mp4) · [triple kill y clip](docs/demo-clip-automatico.mp4)
+
 > Es una herramienta de escritorio que corre en la PC del streamer, por eso no tiene URL publica.
 
 ## Que incluye
