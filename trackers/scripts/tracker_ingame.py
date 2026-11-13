@@ -8,8 +8,10 @@ from dotenv import load_dotenv
 # =====================================================================
 #  TRACKER IN-GAME
 #  Overlay para OBS con el rango, LP y partidas de la sesion.
-#  Tema "Iris" con video warp de fondo y efecto glitch en las rotaciones.
-#  Necesita fondo_warp.webm / fondo_warp.mp4 en trackers/overlays.
+#  Tema "collage": papel oscuro rasgado, marco holografico, cinta y
+#  nombre escrito a mano, a juego con las escenas del stream.
+#  El escudo de rango se descarga solo de CommunityDragon a
+#  trackers/overlays/emblemas la primera vez.
 #  Escribe overlay_ingame.html y overlay_data.json en trackers/overlays.
 # =====================================================================
 
@@ -91,6 +93,29 @@ def obtener_calificacion_jugador(match_data, target_puuid):
         posicion_global += 1
     return "-"
 
+# El escudo de rango (las alas) se guarda en la carpeta de overlays. El servidor del que sale
+# (communitydragon) a veces tarda mucho o no responde, y sin copia local el escudo no aparecia.
+URL_EMBLEMA = "https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-emblem/wings/wings_{}.png"
+
+def asegurar_emblema(tier):
+    nombre = f"wings_{tier.lower()}.png"
+    carpeta = os.path.join(CARPETA_OVERLAYS, "emblemas")
+    destino = os.path.join(carpeta, nombre)
+    if os.path.exists(destino) and os.path.getsize(destino) > 1000:
+        return
+    try:
+        os.makedirs(carpeta, exist_ok=True)
+        res = requests.get(URL_EMBLEMA.format(tier.lower()), timeout=90)
+        if res.status_code == 200 and len(res.content) > 1000:
+            with open(destino + ".tmp", "wb") as f:
+                f.write(res.content)
+            os.replace(destino + ".tmp", destino)
+            print(f"[{time.strftime('%X')}] Escudo de {tier} guardado en emblemas\\{nombre}")
+        else:
+            print(f"[{time.strftime('%X')}] No pude bajar el escudo de {tier} (respuesta {res.status_code}); reintento en la proxima vuelta.")
+    except Exception as e:
+        print(f"[{time.strftime('%X')}] No pude bajar el escudo de {tier}: {str(e)[:60]}; reintento en la proxima vuelta.")
+
 def lp_absoluto(tier, rank, lp):
     return LP_BASE_LIGA.get(tier, 0) + LP_BASE_DIVISION.get(rank, 0) + (lp or 0)
 
@@ -161,7 +186,9 @@ def obtener_datos_riot():
                     f'<div><img src="{h["img"]}"><span>{h["etiqueta"]}</span></div>' for h in historial)
 
             guardar_datos_json()
-            print(f"[{time.strftime('%X')}] Tracker In-Game v4 actualizado.")
+            print(f"[{time.strftime('%X')}] Tracker In-Game actualizado.")
+            # Va despues de guardar los datos: si la descarga del escudo tarda, no frena el resto.
+            asegurar_emblema(datos_actuales['tier'].upper())
 
         except Exception as e:
             print(f"[{time.strftime('%X')}] Error: {str(e)[:80]}")
@@ -199,215 +226,152 @@ HTML_OVERLAY = r"""<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<title>Tracker In-Game v4</title>
+<title>Tracker In-Game</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..900&display=swap">
 <style>
-  /* Tracker In-Game v3 - generado por tracker_ingame_v3.py. Lee ./overlay_data.json
-     Fijo: escudo con alas + icono, nombre + tag, ultimas 10 partidas.
-     Rota cada 7 s: elo + LP | W-L + Session   <->   winrate + partidas | W-L + LP de la sesion */
+  /* Tracker In-Game - generado por tracker_ingame.py. Lee ./overlay_data.json
+     Tema collage, a juego con las escenas del stream (papel oscuro + holografico).
+     ?op=1  papel rasgado, nombre a mano, linea holografica arriba y a la izquierda (por defecto)
+     ?op=2  marco holografico completo sobre papel rasgado, nombre en letra gruesa, sesion en talon claro
+     ?slide=1|2 deja fija una de las dos rotaciones. ?fondo pinta un fondo de prueba detras. */
   html, body { margin: 0; background: transparent; overflow: hidden; }
-  body { font-family: 'Archivo', sans-serif; color: #f1efe9; padding: 60px 28px; }
-  :root { --tier: 46, 204, 113; --win: 0, 163, 255; --loss: 255, 27, 72; --ink: 241, 239, 233; }
+  body { font-family: 'Archivo', sans-serif; color: rgb(var(--ink)); padding: 60px 28px; }
+  body.fondo { background: linear-gradient(160deg, #24382c, #1c2a33); min-height: 100vh; box-sizing: border-box; }
+  :root {
+    --tier: 46, 204, 113; --ink: 211, 206, 198; --gris: 111, 111, 115;
+    --papel: #1a1a1c; --claro: #e6e2da; --cinta: #a8935a;
+    --holo: #8ef6ff, #a9b8ff, #ffa6dc, #fff7b0, #9dffd0, #c7a6ff, #8ef6ff;
+    --grano: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='.22'/></svg>");
+  }
   @keyframes entrar { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-  @keyframes latido { 0%,100% { box-shadow: 0 0 0 0 rgba(var(--tier), .55); } 50% { box-shadow: 0 0 0 5px rgba(var(--tier), 0); } }
+  @keyframes correr { to { background-position-x: 700px; } }
+  .holo-fondo { background: linear-gradient(90deg, var(--holo)) 0 0 / 700px 100%; animation: correr 6s linear infinite; }
+  .holo-texto { background: linear-gradient(90deg, var(--holo)) 0 0 / 700px 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: correr 6s linear infinite; }
 
+  /* ---------- medidas: iguales al tracker actual ---------- */
   .wrap { position: relative; display: inline-block; padding-left: 0; }
   .crest { position: absolute; left: -6px; top: 50%; margin-top: -168px; width: 208px; height: 270px; z-index: 10; pointer-events: none; animation: entrar .5s ease-out both; }
-  .crest .wings { width: 208px; height: 270px; object-fit: contain; filter: drop-shadow(0 0 8px rgba(var(--tier), .35)) drop-shadow(0 0 16px rgba(var(--tier), .2)); }
-  .crest .icon { position: absolute; left: 50%; top: 126px; width: 69px; height: 69px; margin-left: -34.5px; border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,.6); }
-  .card {
-    position: relative; width: 603px; padding: 12px 20px 11px 195px; box-sizing: border-box;
-    background: linear-gradient(90deg, rgba(40, 40, 42, 0.96) 30%, rgba(40, 40, 42, 0.88) 55%, rgba(40, 40, 42, 0.55) 78%, rgba(40, 40, 42, 0) 100%);
-    clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
-    animation: entrar .5s ease-out both;
-  }
-  .card::before { content: ""; position: absolute; inset: 0; pointer-events: none; padding: 1px; z-index: 5;
-    background: linear-gradient(90deg, rgba(var(--tier), .9) 0%, rgba(var(--ink), .16) 12%, rgba(var(--ink), .16) 40%, rgba(var(--ink), .06) 75%, rgba(var(--ink), 0) 100%);
-    clip-path: inherit;
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+  .crest .wings { width: 208px; height: 270px; object-fit: contain; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, .8)) drop-shadow(0 0 10px rgba(169, 184, 255, .3)); }
+  .crest .icon { position: absolute; left: 50%; top: 126px; width: 69px; height: 69px; margin-left: -34.5px; border-radius: 50%;
+    box-shadow: 0 0 0 2px #0b0b0c, 0 0 0 4px rgb(var(--ink)), 0 2px 8px rgba(0, 0, 0, .7); }
+  .card { position: relative; z-index: 1; width: 603px; padding: 12px 20px 11px 195px; box-sizing: border-box;
+    background: var(--grano), radial-gradient(120% 90% at 20% 10%, rgba(255, 255, 255, .06), transparent 60%), var(--papel);
+    animation: entrar .5s ease-out both; }
   .indic { position: absolute; top: 9px; right: 20px; display: flex; gap: 4px; z-index: 6; }
-  .indic i { width: 14px; height: 3px; background: rgba(var(--ink), .2); transition: background .4s; }
-  .indic i.on { background: rgb(var(--tier)); }
+  .indic i { width: 10px; height: 3px; background: rgba(var(--gris), .6); }
+  .indic i.on { background: linear-gradient(90deg, #8ef6ff, #ffa6dc); }
 
   .head { display: flex; align-items: stretch; gap: 14px; margin-top: 4px; }
   .mid { flex: 1; min-width: 0; padding-left: 6px; }
-  .name { font-size: 32px; font-weight: 900; font-stretch: 112%; letter-spacing: -0.02em; line-height: .95; white-space: nowrap; overflow: hidden; }
-  .name .tag { font-size: 16px; font-weight: 500; font-stretch: 100%; letter-spacing: 0; color: rgba(var(--ink), .55); margin-left: 6px; }
+  .name { font-size: 32px; line-height: .95; white-space: nowrap; overflow: hidden; }
+  .name .tag { font-family: ui-monospace, Consolas, monospace; font-size: 14px; font-weight: 600; letter-spacing: .04em; color: rgb(var(--gris)); margin-left: 8px; -webkit-text-stroke: 0; }
 
   .rot { position: relative; height: 34px; margin-top: 7px; }
-  .rot > div { position: absolute; inset: 0; transition: opacity .5s ease, transform .5s ease; }
-  .oculta { opacity: 0; transform: translateY(8px); pointer-events: none; }
+  .rot > div { position: absolute; inset: 0; }
+  .oculta { opacity: 0; pointer-events: none; }
   .line { display: flex; align-items: baseline; gap: 8px; font-size: 17px; font-weight: 800; line-height: 1; white-space: nowrap; }
-  .line .tier { color: rgb(var(--tier)); }
   .line .muted { font-weight: 500; color: rgba(var(--ink), .6); font-size: 14px; }
   .line .sep { width: 1px; height: 14px; background: rgba(var(--ink), .3); align-self: center; }
-  .dot { width: 11px; height: 11px; border-radius: 50%; background: rgb(var(--tier)); animation: latido 2.6s ease-in-out infinite; align-self: center; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: rgb(var(--ink)); align-self: center; }
   .seg { display: flex; gap: 3px; margin-top: 8px; }
-  .seg i { width: 14px; height: 6px; background: rgba(var(--ink), .12); transform: skewX(-20deg); }
-  .seg i.on { background: rgb(var(--tier)); box-shadow: 0 0 5px rgba(var(--tier), .6); }
-  .wrbar { display: flex; height: 6px; margin-top: 8px; width: 186px; background: rgba(var(--ink), .12); transform: skewX(-20deg); }
-  .wrbar .bw { background: rgb(var(--win)); } .wrbar .bl { background: rgb(var(--loss)); }
+  .seg i { width: 14px; height: 6px; background: rgba(var(--gris), .45); }
+  .seg i.on { background: #8ef6ff; }
+  .seg i.on:nth-child(2) { background: #9cd9ff; } .seg i.on:nth-child(3) { background: #a9b8ff; } .seg i.on:nth-child(4) { background: #d4afee; }
+  .seg i.on:nth-child(5) { background: #ffa6dc; } .seg i.on:nth-child(6) { background: #ffcec6; } .seg i.on:nth-child(7) { background: #fff7b0; }
+  .seg i.on:nth-child(8) { background: #cefbc0; } .seg i.on:nth-child(9) { background: #9dffd0; } .seg i.on:nth-child(10) { background: #c7a6ff; }
+  .wrbar { display: flex; height: 6px; margin-top: 8px; width: 186px; background: rgba(var(--gris), .45); }
+  .wrbar .bl { background: rgba(var(--gris), .55); }
 
-  .ses { width: 98px; flex-shrink: 0; border-left: 1px solid rgba(var(--ink), .25); padding-left: 14px;
+  .ses { position: relative; width: 98px; flex-shrink: 0; border-left: 1px solid rgba(var(--ink), .25); padding-left: 14px;
     display: flex; flex-direction: column; justify-content: center; }
-  .ses .wl { font-size: 26px; font-weight: 900; font-stretch: 112%; letter-spacing: -0.01em; line-height: 1; white-space: nowrap; }
-  .ses .wl .w { color: rgb(var(--win)); } .ses .wl .l { color: rgb(var(--loss)); } .ses .wl .d { color: rgba(var(--ink), .35); margin: 0 2px; font-weight: 400; }
+  .ses .wl { font-family: Impact, 'Arial Black', sans-serif; font-size: 27px; letter-spacing: .02em; line-height: 1; white-space: nowrap; }
+  .ses .wl .l { color: rgb(var(--gris)); } .ses .wl .d { color: rgba(var(--ink), .35); margin: 0 3px; }
   .ses .sub { position: relative; height: 16px; margin-top: 6px; }
-  .ses .sub > div { position: absolute; inset: 0; font-size: 13px; font-weight: 700; white-space: nowrap; transition: opacity .5s ease, transform .5s ease; }
+  .ses .sub > div { position: absolute; inset: 0; font-size: 13px; font-weight: 700; white-space: nowrap; }
   .ses .sub .lbl { color: rgba(var(--ink), .55); font-weight: 500; }
-  .pos { color: #3ddc84; } .neg { color: rgb(var(--loss)); } .zero { color: rgba(var(--ink), .55); }
+  .pos { color: #9dffd0; } .neg { color: #ff8096; } .zero { color: rgba(var(--ink), .55); }
 
-  .rule { height: 1px; background: linear-gradient(90deg, rgba(var(--ink), .25), rgba(var(--ink), .08)); margin: 11px 0 9px; }
+  .rule { height: 1px; background: rgba(var(--ink), .22); margin: 11px 0 9px; }
   .hist { display: flex; gap: 4px; min-height: 57px; }
-  .m { width: 35px; text-align: center; animation: entrar .35s ease-out both; }
-  .m img { width: 35px; height: 35px; display: block; object-fit: cover;
-    clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px); }
-  .m .bar { height: 3px; margin-top: 3px; }
-  .m.win .bar { background: rgb(var(--win)); } .m.loss .bar { background: rgb(var(--loss)); }
-  .m.loss img { filter: grayscale(.55) brightness(.8); }
-  .m span { display: block; margin-top: 3px; font-size: 10px; font-weight: 600; color: rgba(var(--ink), .6); }
-  .m span.mvp { color: #ffc93c; } .m span.ace { color: #b79cff; }
+  .m { width: 35px; text-align: center; }
+  .m img { width: 35px; height: 35px; display: block; object-fit: cover; box-sizing: border-box; border: 1px solid rgba(var(--ink), .55); }
+  .m .bar { height: 3px; margin-top: 3px; background: rgba(var(--gris), .6); }
+  .m.loss img { filter: grayscale(1) brightness(.6) contrast(1.1); border-color: rgba(var(--gris), .7); }
+  .m span { display: block; margin-top: 3px; font-family: ui-monospace, Consolas, monospace; font-size: 10px; font-weight: 600; color: rgba(var(--ink), .6); }
+  .m span.mvp { color: #0b0b0c; }
+  .m span.ace { color: rgb(var(--ink)); box-shadow: inset 0 0 0 1px rgba(var(--ink), .7); }
 
-  /* ================= EFECTO GLITCH (intenso) ================= */
-  /* Cortes secos, como en el video: sin fundidos */
-  .rot > div, .ses .sub > div { transition: none !important; }
-  .oculta { transform: none !important; }
+  /* ---------- papel rasgado, linea holografica, cinta y tiza ---------- */
+  .fibra, .base { position: absolute; z-index: 0; pointer-events: none; animation: entrar .5s ease-out both; }
+  /* El borde rasgado tiene tres variantes que se turnan cada 0,6 s: se mueve, pero despacio. */
+  .fibra { animation: entrar .5s ease-out both, turno 1.8s steps(1) infinite; }
+  .fibra.f2 { animation-delay: 0s, -1.2s; }
+  .fibra.f3 { animation-delay: 0s, -.6s; }
+  @keyframes turno { 0% { opacity: 1; } 33.34%, 100% { opacity: 0; } }
+  .fibra { background: var(--grano), #8f8d89; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .7)); }
+  .base { background: var(--grano), #2b2b2e; display: none; }
+  .hb { position: absolute; z-index: 5; pointer-events: none; }
+  .hb.t, .hb.b { left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--holo)) 0 0 / 700px 100%; animation: correr 6s linear infinite; }
+  .hb.l, .hb.r { top: 0; bottom: 0; width: 3px; background: linear-gradient(180deg, var(--holo)) 0 0 / 100% 700px; animation: correr-y 6s linear infinite; }
+  @keyframes correr-y { to { background-position-y: 700px; } }
+  .hb.t { top: 0; } .hb.b { bottom: 0; animation-direction: reverse; } .hb.l { left: 0; } .hb.r { right: 0; animation-direction: reverse; }
+  .cinta { position: absolute; z-index: 11; width: 96px; height: 28px; background: var(--grano), var(--cinta); opacity: .92;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .5)); clip-path: polygon(3px 0, 100% 2px, calc(100% - 3px) 50%, 100% 100%, 2px 100%, 0 55%); }
+  .tiza { position: absolute; z-index: 2; pointer-events: none; opacity: .75; }
 
-  /* Grano de impresion que "salta" a 10 cuadros por segundo */
-  .grain { position: absolute; inset: 0; pointer-events: none; z-index: 4; mix-blend-mode: overlay;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); opacity: .13; animation: grano 1s steps(10) infinite; }
-  @keyframes grano { 0%{background-position:0 0} 10%{background-position:-37px 21px} 20%{background-position:53px -14px}
-    30%{background-position:-12px 47px} 40%{background-position:29px 8px} 50%{background-position:-44px -33px}
-    60%{background-position:17px 39px} 70%{background-position:-25px -6px} 80%{background-position:41px 26px} 90%{background-position:-8px -45px} }
-  .scan { position: absolute; inset: 0; pointer-events: none; z-index: 4; display: block;
-    background: repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 1px, transparent 1px 3px); opacity: .55; }
+  /* ---------- OPCION 1: papel rasgado y letra a mano ---------- */
+  body.op1 .name { font-family: 'Ink Free', 'Segoe Print', cursive; font-weight: 700; -webkit-text-stroke: .7px currentColor; color: #e6e2da; }
+  body.op1 .line, body.op1 .ses .sub > div { font-family: ui-monospace, Consolas, monospace; font-size: 14px; letter-spacing: .02em; }
+  body.op1 .hb.r, body.op1 .hb.b { display: none; }
+  body.op1 .cinta { left: 524px; top: -11px; rotate: 9deg; }
+  body.op1 .tiza { left: 566px; top: 104px; width: 22px; height: 22px; }
 
-  /* Separacion rojo/azul en el texto durante el glitch */
+  /* ---------- OPCION 2: marco holografico completo, letra gruesa y talon claro ---------- */
+  body.op2 .base { display: block; }
+  body.op2 .card { background: var(--grano), #121214; }
+  body.op2 .name { font-family: 'Ink Free', 'Segoe Print', cursive; font-weight: 700; -webkit-text-stroke: .7px currentColor; color: #e6e2da; }
+  body.op2 .line { font-size: 15px; text-transform: uppercase; letter-spacing: .04em; }
+  body.op2 .indic { top: 11px; }
+  body.op2 .m:nth-child(odd) { rotate: -2.5deg; } body.op2 .m:nth-child(even) { rotate: 2deg; }
+  body.op2 .m img { border: 2px solid #e6e2da; }
+  body.op2 .m.loss img { border-color: #77747a; }
+  body.op2 .cinta { left: 250px; top: -22px; rotate: -4deg; }
+  body.op2 .tiza { display: none; }
+
+  /* ---------- cambio de rotacion: el glitch de siempre, con la paleta nueva ---------- */
+  .grain { position: absolute; inset: 0; pointer-events: none; z-index: 4; mix-blend-mode: overlay; background-image: var(--grano); opacity: .5; }
   @keyframes rgb {
-    0%   { text-shadow: -4px 0 rgba(255,27,72,.95), 4px 0 rgba(0,163,255,.95); transform: translateX(2px); }
-    20%  { text-shadow: 2px 0 rgba(255,27,72,.9), -2px 0 rgba(0,163,255,.9); transform: translateX(-4px); }
-    40%  { text-shadow: -4px 1px rgba(255,27,72,.9), 2px -1px rgba(0,163,255,.9); transform: translateX(1px); }
-    60%  { text-shadow: 1px 0 rgba(255,27,72,.7), -1px 0 rgba(0,163,255,.7); transform: translateX(-1px); }
+    0%   { text-shadow: -4px 0 rgba(255, 166, 220, .95), 4px 0 rgba(142, 246, 255, .95); transform: translateX(2px); }
+    20%  { text-shadow: 2px 0 rgba(255, 166, 220, .9), -2px 0 rgba(142, 246, 255, .9); transform: translateX(-4px); }
+    40%  { text-shadow: -4px 1px rgba(255, 247, 176, .9), 2px -1px rgba(169, 184, 255, .9); transform: translateX(1px); }
+    60%  { text-shadow: 1px 0 rgba(255, 166, 220, .7), -1px 0 rgba(142, 246, 255, .7); transform: translateX(-1px); }
     80%  { text-shadow: none; transform: translateX(1px); }
     100% { text-shadow: none; transform: none; }
   }
-  .wrap.glitch .name, .wrap.glitch .rot, .wrap.glitch .ses { animation: rgb .65s steps(1) both; }
+  .wrap.glitch .name, .wrap.glitch .rot, .wrap.glitch .ses .wl, .wrap.glitch .ses .sub { animation: rgb .65s steps(1) both; }
   .wrap.mini .name { animation: rgb .3s steps(1) both; }
-
-  /* Bandas de "rotura" que cruzan la tarjeta */
   .tears { position: absolute; inset: 0; pointer-events: none; z-index: 7; }
   .tears i { position: absolute; left: 0; right: 0; height: 4px; opacity: 0; mix-blend-mode: screen; }
   .wrap.glitch .tears i { animation: tear .65s steps(1) both; }
-  .tears i:nth-child(1) { background: rgba(255,27,72,.75); }
-  .tears i:nth-child(2) { background: rgba(0,163,255,.75); animation-delay: .07s !important; }
-  .tears i:nth-child(3) { background: rgba(var(--tier),.6); animation-delay: .14s !important; }
-  .tears i:nth-child(4) { background: rgba(241,239,233,.35); animation-delay: .04s !important; display: block; }
-  .tears i:nth-child(5) { background: rgba(255,27,72,.5); animation-delay: .2s !important; display: block; }
+  .tears i:nth-child(1) { background: rgba(255, 166, 220, .75); }
+  .tears i:nth-child(2) { background: rgba(142, 246, 255, .75); animation-delay: .07s !important; }
+  .tears i:nth-child(3) { background: rgba(255, 247, 176, .6); animation-delay: .14s !important; }
+  .tears i:nth-child(4) { background: rgba(211, 206, 198, .35); animation-delay: .04s !important; }
+  .tears i:nth-child(5) { background: rgba(199, 166, 255, .55); animation-delay: .2s !important; }
   @keyframes tear { 0%{opacity:1; transform:translateX(-10px)} 25%{opacity:0} 40%{opacity:1; transform:translateX(14px) scaleY(1.8)} 60%{opacity:0} 75%{opacity:.8; transform:translateX(-6px)} 100%{opacity:0} }
-
-  /* Intenso: la tarjeta se "corta" en franjas y salta */
-  @keyframes cortes {
-    0%   { clip-path: inset(0 0 62% 0); transform: translateX(-5px); }
-    15%  { clip-path: inset(35% 0 20% 0); transform: translateX(6px); }
-    30%  { clip-path: inset(0 0 0 0); transform: translateX(-2px); }
-    45%  { clip-path: inset(55% 0 0 0); transform: translateX(4px); }
-    60%  { clip-path: inset(0 0 0 0); transform: translateX(0); }
-    100% { clip-path: inset(0 0 0 0); transform: none; }
-  }
-  .wrap.glitch.fuerte .head, .wrap.glitch.fuerte .hist { animation: cortes .65s steps(1) both; }
-  @keyframes escudo { 0%{filter: drop-shadow(-4px 0 0 rgba(255,27,72,.9)) drop-shadow(4px 0 0 rgba(0,163,255,.9)); transform: translateX(3px)}
-    30%{filter: none; transform: translateX(-3px)} 50%{filter: drop-shadow(3px 0 0 rgba(255,27,72,.9)) drop-shadow(-3px 0 0 rgba(0,163,255,.9)); transform:none} 70%,100%{filter:none; transform:none} }
-  .wrap.glitch.fuerte .crest .wings, .wrap.glitch.fuerte .crest .icon { animation: escudo .65s steps(1) both; }
-
-  /* Historial: aparece parpadeando, entrecortado */
-  .m { animation-name: parpadeo !important; animation-duration: .6s !important; animation-timing-function: steps(1) !important; }
-  @keyframes parpadeo { 0%{opacity:0} 20%{opacity:1} 35%{opacity:0} 50%{opacity:1; transform:translateX(-2px)} 65%{opacity:.3} 80%,100%{opacity:1; transform:none} }
-
-  /* ================= TEMA: IRIS (estetica del video) ================= */
-  :root { --win: 31, 107, 255; --loss: 214, 31, 44; --ink: 236, 244, 255; --cian: 111, 227, 255; --verde: 61, 255, 110; }
-  .card {
-    background:
-      radial-gradient(circle at 98px 50%, rgba(var(--win), .55) 0, rgba(var(--win), .22) 55px, rgba(var(--win), .06) 95px, transparent 125px),
-      linear-gradient(90deg, rgba(4, 6, 15, .97) 30%, rgba(4, 6, 15, .9) 55%, rgba(4, 6, 15, .55) 78%, rgba(4, 6, 15, 0) 100%);
-  }
-  .card::before { background: linear-gradient(90deg, rgba(var(--cian), .9) 0%, rgba(var(--win), .45) 20%, rgba(var(--ink), .1) 50%, rgba(var(--ink), 0) 100%); }
-  .crest .wings { filter: drop-shadow(0 0 12px rgba(var(--cian), .55)) drop-shadow(0 0 3px rgba(var(--cian), .9)); }
-  .crest .icon { box-shadow: 0 0 0 2px rgba(var(--cian), .8), 0 0 16px rgba(var(--win), .9); }
-
-  .name { text-shadow: 0 0 14px rgba(var(--win), .55); }
-  .name .tag { color: rgb(var(--cian)); }
-  .line .tier { color: rgb(var(--cian)); }
-  .dot { background: rgb(var(--loss)); box-shadow: 0 0 8px rgba(var(--loss), .9); animation: latidoRojo 1.2s steps(2) infinite; }
-  @keyframes latidoRojo { 50% { opacity: .35; } }
-  .seg i { background: rgba(var(--cian), .14); }
-  .seg i.on { background: rgb(var(--cian)); box-shadow: 0 0 6px rgba(var(--cian), .9); }
-  .wrbar .bw { background: rgb(var(--win)); }
-  .ses { border-left: 1px solid rgba(var(--cian), .3); }
-  .ses .sub .lbl { color: rgba(var(--ink), .55); }
-  .pos { color: rgb(var(--verde)); }
-  .indic i { width: 10px; background: rgba(var(--verde), .2); } .indic i.on { background: rgb(var(--verde)); box-shadow: 0 0 5px rgba(var(--verde), .9); }
-  .rule { background: linear-gradient(90deg, rgba(var(--cian), .45), rgba(var(--cian), 0)); }
-
-  /* campeones dentro de marcos azules, como las tarjetas del video */
-  .m img { filter: saturate(.75) contrast(1.1); box-shadow: inset 0 0 0 2px rgb(var(--win)); outline: 2px solid rgba(var(--win), .85); outline-offset: -2px; }
-  .m.loss img { filter: grayscale(.7) sepia(.4) hue-rotate(-30deg) saturate(2.4) brightness(.75); outline-color: rgba(var(--loss), .85); }
-  .m.win .bar { background: rgb(var(--cian)); }
-  .m span.mvp { color: #ffd400; } .m span.ace { color: rgb(var(--cian)); }
-
-  /* manchas rojas y lente */
-  .deco { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
-  .deco svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-  .grain { opacity: .15; }
-
-  /* ================= FONDO WARP (video) ================= */
-  .card {
-    background:
-      linear-gradient(90deg, rgba(1, 2, 6, .97) 30%, rgba(1, 2, 6, .9) 55%, rgba(1, 2, 6, .55) 78%, rgba(1, 2, 6, 0) 100%);
-  }
-  /* el video se desvanece igual que la tarjeta: solido a la izquierda, transparente a la derecha */
-  .deco .fondo { position: absolute; inset: 0; overflow: hidden;
-    -webkit-mask: linear-gradient(90deg, #000 40%, rgba(0,0,0,.65) 72%, transparent 100%);
-            mask: linear-gradient(90deg, #000 40%, rgba(0,0,0,.65) 72%, transparent 100%); }
-  /* centro del warp (centro del video) justo sobre el escudo: x 98, y 83 */
-  .deco .fondo video { position: absolute; width: 1040px; height: 585px; left: -422px; top: -209px; object-fit: cover;
-    opacity: .85; }
-  /* resplandor azul del iris por encima del video */
-  .deco .glow { position: absolute; inset: 0; background: radial-gradient(circle at 98px 50%, rgba(var(--win), .35) 0, rgba(var(--win), .1) 50px, transparent 95px); }
-
-  /* ================= FONDO DESDE ARRIBA A LA IZQUIERDA =================
-     Solido en la esquina superior izquierda y se vuelve transparente hacia
-     las otras tres esquinas (fondo, borde fino y video warp). */
-  .card {
-    background: radial-gradient(ellipse farthest-corner at 0 0, rgba(1, 2, 6, .97) 0%, rgba(1, 2, 6, .9) 25%, rgba(1, 2, 6, .6) 50%, rgba(1, 2, 6, .25) 72%, rgba(1, 2, 6, 0) 92%);
-  }
-  .card::before {
-    background: radial-gradient(ellipse farthest-corner at 0 0, rgba(var(--cian), .9) 0%, rgba(var(--win), .45) 22%, rgba(var(--ink), .12) 48%, rgba(var(--ink), 0) 75%);
-  }
-  .deco .fondo {
-    -webkit-mask: radial-gradient(ellipse farthest-corner at 0 0, #000 0%, #000 20%, rgba(0,0,0,.45) 45%, transparent 70%);
-            mask: radial-gradient(ellipse farthest-corner at 0 0, #000 0%, #000 20%, rgba(0,0,0,.45) 45%, transparent 70%);
-  }
+  .m { animation: parpadeo .6s steps(1) both; }
+  @keyframes parpadeo { 0%{opacity:0} 20%{opacity:1} 35%{opacity:0} 50%{opacity:1} 65%{opacity:.3} 80%,100%{opacity:1} }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <div class="fibra"></div><div class="fibra f2"></div><div class="fibra f3"></div>
+  <div class="base"></div>
   <div class="crest"><img id="emb" class="wings" alt=""><img id="icon" class="icon" alt=""></div>
+  <div class="cinta"></div>
   <div class="card">
-  <div class="deco">
-    <div class="fondo">
-      <video autoplay muted loop playsinline>
-        <source src="fondo_warp.webm" type="video/webm">
-        <source src="fondo_warp.mp4" type="video/mp4">
-      </video>
-    </div>
-    <div class="glow"></div>
-    <svg viewBox="0 0 603 181" preserveAspectRatio="none">
-      <!-- marcas de mira -->
-      <path d="M186 10 L186 170" stroke="rgba(111,227,255,.25)" stroke-width="1" stroke-dasharray="1 4"/>
-      <path d="M8 83 L14 83 M182 83 L190 83" stroke="rgba(111,227,255,.6)" stroke-width="1"/>
-      <circle cx="568" cy="150" r="3" fill="rgba(214,31,44,.9)"/><circle cx="580" cy="150" r="3" fill="none" stroke="rgba(214,31,44,.9)"/>
-    </svg>
-  </div>
+    <i class="hb t"></i><i class="hb l"></i><i class="hb r"></i><i class="hb b"></i>
+    <svg class="tiza" viewBox="-20 -20 40 40"><path d="M0,-18 C1.5,-5 5,-1.5 12,0 C5,1.5 1.5,5 0,18 C-1.5,5 -5,1.5 -12,0 C-5,-1.5 -1.5,-5 0,-18 Z" fill="#d3cec6"/></svg>
 
     <div class="indic"><i id="i1" class="on"></i><i id="i2"></i></div>
     <div class="head">
@@ -415,17 +379,17 @@ HTML_OVERLAY = r"""<!DOCTYPE html>
         <div class="name" id="nameBox"><span id="name">-</span><span class="tag" id="tag"></span></div>
         <div class="rot">
           <div id="rA">
-            <div class="line"><span class="tier" id="tier">-</span><span><span id="lp">0</span>LP</span><span class="dot"></span></div>
+            <div class="line"><span class="tier holo-texto" id="tier">-</span><span><span id="lp">0</span>LP</span><span class="dot"></span></div>
             <div class="seg" id="seg"></div>
           </div>
           <div id="rB" class="oculta">
             <div class="line"><span><span id="wr">—</span> Winrate</span><span class="sep"></span><span class="muted"><span id="games">-</span> Games</span></div>
-            <div class="wrbar"><div class="bw" id="bw" style="width:50%"></div><div class="bl" id="bl" style="width:50%"></div></div>
+            <div class="wrbar"><div class="bw holo-fondo" id="bw" style="width:50%"></div><div class="bl" id="bl" style="width:50%"></div></div>
           </div>
         </div>
       </div>
       <div class="ses">
-        <div class="wl"><span class="w" id="w">0W</span><span class="d">-</span><span class="l" id="l">0L</span></div>
+        <div class="wl"><span class="w holo-texto" id="w">0W</span><span class="d">-</span><span class="l" id="l">0L</span></div>
         <div class="sub">
           <div id="sA" class="lbl">Session</div>
           <div id="sB" class="oculta"><span id="lpdiff" class="zero">±0 LP</span></div>
@@ -437,8 +401,13 @@ HTML_OVERLAY = r"""<!DOCTYPE html>
   </div>
 </div>
 <script>
+  const Q = new URLSearchParams(location.search);
+  const OPCION = Q.get("op") === "1" ? 1 : 2;   // la elegida es la 2
+  document.body.classList.add("op" + OPCION);
+  if (Q.has("fondo")) document.body.classList.add("fondo");
+
   const PARTIDAS = 10;   // partidas que se muestran abajo
-  const SEGUNDOS = parseFloat(new URLSearchParams(location.search).get("seg")) || 10;   // segundos de cada rotacion; el glitch va con cada rotacion (?seg=N para probar)
+  const SEGUNDOS = parseFloat(Q.get("seg")) || 10;   // segundos de cada rotacion (?seg=N para probar)
   const COLORES = {
     IRON:"161,157,148", BRONZE:"205,127,50", SILVER:"189,195,199", GOLD:"241,196,15",
     PLATINUM:"26,188,156", EMERALD:"46,204,113", DIAMOND:"52,152,219",
@@ -454,6 +423,46 @@ HTML_OVERLAY = r"""<!DOCTYPE html>
     while (box.scrollWidth > box.clientWidth && size > 20) { size -= 2; box.style.fontSize = size + "px"; }
   }
 
+  // Borde rasgado (abajo y a la derecha). Opcion 1: la tarjeta misma es el papel.
+  // Opcion 2: la tarjeta queda recta con su marco y el papel rasgado asoma 10 px por detras.
+  const wrap = document.querySelector(".wrap"), card = document.querySelector(".card");
+  function rasgar() {
+    const m = OPCION === 2 ? 10 : 0, w = card.offsetWidth + 2 * m, h = card.offsetHeight + 2 * m;
+    let s = 7;
+    const r = () => { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const fuera = [[0, 0]], dentro = [[0, 0]], f2 = [[0, 0]], f3 = [[0, 0]];
+    const j = () => (r() - .5) * 5;   // cuanto se corre el borde en las otras dos variantes
+    let p = 3;
+    for (let y = 0; y < h; y += 11) { p = Math.max(0, Math.min(8, p + (r() - .5) * 6)); const e = 1.5 + r() * 4;
+      fuera.push([w - p, y]); dentro.push([w - p - e, y]); f2.push([w - p + j(), y]); f3.push([w - p + j(), y]); }
+    p = 2;
+    for (let x = w; x > 0; x -= 11) { p = Math.max(0, Math.min(5, p + (r() - .5) * 4)); const e = 1.5 + r() * 3;
+      fuera.push([x, h - p]); dentro.push([x, h - p - e]); f2.push([x, h - p + j()]); f3.push([x, h - p + j()]); }
+    [fuera, dentro, f2, f3].forEach(a => a.push([0, h]));
+    const poli = pts => "polygon(" + pts.map(q => q[0].toFixed(1) + "px " + q[1].toFixed(1) + "px").join(",") + ")";
+    // Las fibras tienen 4 px de aire para que el borde pueda moverse hacia afuera.
+    const caja = `left:${-m}px;top:${card.offsetTop - m}px;width:${w}px;height:${h}px;`;
+    document.querySelectorAll(".fibra").forEach((el, k) => {
+      el.style.cssText = `left:${-m}px;top:${card.offsetTop - m}px;width:${w + 4}px;height:${h + 4}px;clip-path:` + poli([fuera, f2, f3][k]);
+    });
+    document.querySelector(".base").style.cssText = caja + "clip-path:" + poli(dentro);
+    card.style.clipPath = OPCION === 1 ? poli(dentro) : "none";
+  }
+  new ResizeObserver(rasgar).observe(card);
+
+  // Escudo de rango: primero la copia local (./emblemas, la baja el script) y, si todavia no esta,
+  // la de internet. Si ninguna cargo, se vuelve a probar en cada actualizacion hasta que aparezca.
+  function ponerEscudo(tier) {
+    const el = $("emb");
+    const local = `./emblemas/wings_${tier}.png?v=` + Date.now();
+    const remoto = `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-emblem/wings/wings_${tier}.png`;
+    if (el.dataset.tier === tier && (el.naturalWidth || !el.complete)) return;   // ya se ve, o todavia esta cargando
+    el.dataset.tier = tier;
+    el.onerror = () => { if (el.dataset.paso === "local") { el.dataset.paso = "remoto"; el.src = remoto; } };
+    el.dataset.paso = "local";
+    el.src = local;
+  }
+
   let ultimoHist = null, ultimoNombre = null;
   async function actualizar() {
     try {
@@ -464,7 +473,7 @@ HTML_OVERLAY = r"""<!DOCTYPE html>
       const sinDiv = SIN_DIVISION.includes(tier);
       document.documentElement.style.setProperty("--tier", COLORES[tier] || "255,255,255");
 
-      setSrc("emb", `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-emblem/wings/wings_${tier.toLowerCase()}.png`);
+      ponerEscudo(tier.toLowerCase());
       setSrc("icon", `https://ddragon.leagueoflegends.com/cdn/${d.latest_patch}/img/profileicon/${d.profile_icon_id}.png`);
 
       const nombre = (d.riot_id || "-") + "|" + (d.riot_tag || "");
@@ -501,9 +510,9 @@ HTML_OVERLAY = r"""<!DOCTYPE html>
       if (hist !== ultimoHist) {
         ultimoHist = hist;
         $("hist").innerHTML = (d.historial || []).slice(0, PARTIDAS).map((m, k) => {
-          const cls = m.etiqueta === "MVP" ? "mvp" : m.etiqueta === "ACE" ? "ace" : "";
+          const cls = m.etiqueta === "MVP" ? "mvp holo-fondo" : m.etiqueta === "ACE" ? "ace" : "";
           return `<div class="m ${m.win ? "win" : "loss"}" style="animation-delay:${k * .05}s">
-            <img src="${m.img}" alt=""><div class="bar"></div><span class="${cls}">${m.etiqueta}</span></div>`;
+            <img src="${m.img}" alt=""><div class="bar ${m.win ? "holo-fondo" : ""}"></div><span class="${cls}">${m.etiqueta}</span></div>`;
         }).join("");
       }
     } catch (e) { console.error(e); }
@@ -511,28 +520,10 @@ HTML_OVERLAY = r"""<!DOCTYPE html>
   actualizar();
   setInterval(actualizar, 3000);
 
-  // Rotacion de la parte de arriba. Con ?slide=1 o ?slide=2 en la ruta queda fija.
-  function mostrar(n) {
-    ["rA", "sA"].forEach(id => $(id).classList.toggle("oculta", n !== 1));
-    ["rB", "sB"].forEach(id => $(id).classList.toggle("oculta", n !== 2));
-    $("i1").classList.toggle("on", n === 1); $("i2").classList.toggle("on", n === 2);
-  }
-  const fija = parseInt(new URLSearchParams(location.search).get("slide"));
-  if (fija === 1 || fija === 2) mostrar(fija);
-  else { let n = 1; mostrar(n); setInterval(() => { n = n === 1 ? 2 : 1; mostrar(n); }, SEGUNDOS * 1000); }
-</script>
-
-<script>
-  /* ================= EFECTO GLITCH (intenso) ================= */
-  const MODO = "intenso";
+  /* ================= cambio de rotacion con glitch ================= */
   const DURACION = 650;                      // ms que dura el glitch de cada rotacion
-  const PAUSA_MINI = [5, 9];     // cada cuantos segundos hay un mini glitch en el nombre
   const SIMBOLOS = "█▓▒░#%&@$*+=/<>_-";
-  const wrap = document.querySelector(".wrap"), card = document.querySelector(".card");
-  if (MODO === "intenso") wrap.classList.add("fuerte");
-
-  // capas extra: grano, lineas de barrido y bandas
-  card.insertAdjacentHTML("beforeend", '<div class="grain"></div><div class="scan"></div><div class="tears"><i></i><i></i><i></i><i></i><i></i></div>');
+  card.insertAdjacentHTML("beforeend", '<div class="grain"></div><div class="tears"><i></i><i></i><i></i><i></i><i></i></div>');
 
   // Las letras aparecen de a una, con simbolos que se van "acomodando" (10 cuadros por segundo)
   function revelar(el, ms) {
@@ -552,34 +543,26 @@ HTML_OVERLAY = r"""<!DOCTYPE html>
 
   function lanzarGlitch() {
     wrap.classList.remove("glitch"); void wrap.offsetWidth; wrap.classList.add("glitch");
-    card.querySelectorAll(".tears i").forEach(t => { t.style.top = (8 + Math.random() * 80) + "%"; t.style.height = (2 + Math.random() * (MODO === "intenso" ? 9 : 4)) + "px"; });
+    card.querySelectorAll(".tears i").forEach(t => { t.style.top = (8 + Math.random() * 80) + "%"; t.style.height = (2 + Math.random() * 9) + "px"; });
     clearTimeout(wrap._t); wrap._t = setTimeout(() => wrap.classList.remove("glitch"), DURACION);
   }
 
-  // Reemplaza la rotacion: corte seco en medio del glitch y el texto nuevo se "escribe"
+  // Rotacion de la parte de arriba. Con ?slide=1 o ?slide=2 en la ruta queda fija.
+  function poner(n) {
+    ["rA", "sA"].forEach(id => $(id).classList.toggle("oculta", n !== 1));
+    ["rB", "sB"].forEach(id => $(id).classList.toggle("oculta", n !== 2));
+    $("i1").classList.toggle("on", n === 1); $("i2").classList.toggle("on", n === 2);
+  }
   function mostrar(n) {
     lanzarGlitch();
     setTimeout(() => {
-      ["rA", "sA"].forEach(id => $(id).classList.toggle("oculta", n !== 1));
-      ["rB", "sB"].forEach(id => $(id).classList.toggle("oculta", n !== 2));
-      $("i1").classList.toggle("on", n === 1); $("i2").classList.toggle("on", n === 2);
-      const entra = n === 1 ? ["rA", "sA"] : ["rB", "sB"];
-      entra.forEach(id => hojas(id).forEach(el => revelar(el, MODO === "intenso" ? 500 : 350)));
+      poner(n);
+      (n === 1 ? ["rA", "sA"] : ["rB", "sB"]).forEach(id => hojas(id).forEach(el => revelar(el, 500)));
     }, 110);
   }
-
-  // Mini glitch de vez en cuando sobre el nombre
-  const idle = parseFloat(new URLSearchParams(location.search).get("idle"));
-  function programarMini() {
-    const s = idle || (PAUSA_MINI[0] + Math.random() * (PAUSA_MINI[1] - PAUSA_MINI[0]));
-    setTimeout(() => {
-      wrap.classList.remove("mini"); void wrap.offsetWidth; wrap.classList.add("mini");
-      setTimeout(() => wrap.classList.remove("mini"), 320);
-      programarMini();
-    }, s * 1000);
-  }
-  // Sin mini glitch suelto: el glitch ocurre solo con cada rotacion (cada 10 s). Con ?idle=N se puede volver a activar.
-  if (idle) programarMini();
+  const fija = parseInt(Q.get("slide"));
+  if (fija === 1 || fija === 2) poner(fija);
+  else { let n = 1; poner(n); setInterval(() => { n = n === 1 ? 2 : 1; mostrar(n); }, SEGUNDOS * 1000); }
 
   // Al aparecer, el nombre se escribe letra por letra
   setTimeout(() => { revelar($("name"), 700); lanzarGlitch(); }, 400);
@@ -599,11 +582,9 @@ def generar_html_base():
 if __name__ == "__main__":
     os.makedirs(CARPETA_OVERLAYS, exist_ok=True)
     generar_html_base()
-    if not any(os.path.exists(os.path.join(CARPETA_OVERLAYS, f)) for f in ("fondo_warp.webm", "fondo_warp.mp4")):
-        print("AVISO: no encontre fondo_warp.webm ni fondo_warp.mp4 en la carpeta de overlays; el fondo warp no se va a ver.")
     guardar_datos_json()
     threading.Thread(target=obtener_datos_riot, daemon=True).start()
 
-    print("Tracker IN-GAME v4 inicializado.")
+    print("Tracker IN-GAME inicializado.")
     while True:
         time.sleep(10)

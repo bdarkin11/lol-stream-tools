@@ -4,9 +4,9 @@ Herramientas en Python para streamear League of Legends y TFT. Resuelven un prob
 
 ## Demo
 
-**Overlay en OBS** (rango, LP, winrate y ultimas partidas, con rotacion y efecto glitch):
+**Tracker in-game, tema "collage"** (rango, LP, sesion y ultimas partidas). Arriba el diseño anterior, abajo el actual:
 
-![Overlay en OBS](docs/demo-overlay.gif)
+![Tracker antes y despues](docs/tracker-antes-despues.gif)
 
 **Clip automatico en una triple kill:** el bot detecta el multikill con la Live Client Data API, crea el clip en Twitch y publica el link en el chat.
 
@@ -14,7 +14,17 @@ Herramientas en Python para streamear League of Legends y TFT. Resuelven un prob
 
 ![Mensajes del bot en el chat](docs/demo-chat-bot.png)
 
-Videos completos: [overlay](docs/demo-overlay.mp4) · [triple kill y clip](docs/demo-clip-automatico.mp4)
+Video completo: [triple kill y clip](docs/demo-clip-automatico.mp4)
+
+### Escenas del stream
+
+El tracker comparte estilo con las escenas de OBS (papel rasgado, cinta y detalles holograficos). Los recuadros marcan donde va cada fuente.
+
+| Comenzando | Lobby |
+|---|---|
+| ![Escena comenzando](docs/escena-comenzando.gif) | ![Escena lobby](docs/escena-lobby.gif) |
+| **Transicion** | **Partida** |
+| ![Transicion](docs/transicion.gif) | ![Escena partida](docs/escena-partida.gif) |
 
 > Es una herramienta de escritorio que corre en la PC del streamer, por eso no tiene URL publica.
 
@@ -51,7 +61,7 @@ Este proyecto se construyo con desarrollo asistido por IA (Claude), con el autor
 4. Ejecutar `launcher\iniciar_stream_tools.bat`.
 5. En OBS, agregar como fuente de navegador `scout/overlay.html` y los HTML de `trackers/overlays/`.
 
-El tema del tracker in-game usa un video de fondo opcional (`fondo_warp.webm` / `fondo_warp.mp4`) que va en `trackers/overlays/` y no se incluye en el repo. La key de desarrollo de Riot vence cada 24 horas y se actualiza solo en `launcher/.env`.
+La key de desarrollo de Riot vence cada 24 horas y se actualiza solo en `launcher/.env`.
 
 ## Aviso
 
